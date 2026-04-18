@@ -57,10 +57,10 @@ jobs:
             # ── 4. Restart the bot service ───────────────────────────────────────
             echo "==> Restarting gold-bot service..."
             sudo systemctl daemon-reload
-            sudo systemctl restart gold-bot.service || true
+            sudo systemctl restart gold-4h-breakout.service || true
 
             echo ""
-            sudo systemctl status gold-bot.service --no-pager --lines=5 || true
+            sudo systemctl status gold-4h-breakout.service --no-pager --lines=5 || true
 
             echo ""
             echo "==> Deployment complete."

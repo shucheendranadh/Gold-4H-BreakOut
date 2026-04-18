@@ -107,22 +107,22 @@ fi
 # ── STEP 5: Systemd service ────────────────────────────────────────────────────
 echo "[5/6] Installing/updating systemd service...
 "
-SERVICE_FILE="/etc/systemd/system/gold-bot.service"
+SERVICE_FILE="/etc/systemd/system/gold-4h-breakout.service"
 
-cp "$PROJECT_LOCATION/scripts/gold_bot.service" "$SERVICE_FILE"
+cp "$PROJECT_LOCATION/scripts/gold-4h-breakout.service" "$SERVICE_FILE"
 sed -i "s|__USERNAME__|$RUN_USER|g"                  "$SERVICE_FILE"
 sed -i "s|__PROJECT_LOCATION__|$PROJECT_LOCATION|g"  "$SERVICE_FILE"
 
 systemctl daemon-reload
-systemctl disable gold-bot.service 2>/dev/null || true
+systemctl disable gold-4h-breakout.service 2>/dev/null || true
 echo "  Service installed at $SERVICE_FILE"
 
 # ── STEP 5: Cron job — start bot at 09:00 IST (03:30 UTC) Mon-Fri ──────────────
 echo "[6/6] Installing daily cron job (09:00 IST / 03:30 UTC, Mon-Fri)..."
-CRON_FILE="/etc/cron.d/gold-bot"
+CRON_FILE="/etc/cron.d/gold-4h-breakout"
 cat > "$CRON_FILE" <<EOF
 # Start GOLD bot at 09:00 IST (03:30 UTC) every weekday
-30 3 * * 1-5 root /bin/systemctl start gold-bot.service >> /var/log/gold-bot-cron.log 2>&1
+30 3 * * 1-5 root /bin/systemctl start gold-4h-breakout.service >> /var/log/gold-4h-breakout-cron.log 2>&1
 EOF
 chmod 644 "$CRON_FILE"
 echo "  Cron installed at $CRON_FILE"
@@ -142,7 +142,7 @@ echo "  One-time step — write your Upstox token:"
 echo "    echo 'UPSTOX_ACCESS_TOKEN=eyJ0eXAiOi...' > $TOKEN_FILE"
 echo ""
 echo "  Start manually:"
-echo "    sudo systemctl start gold-bot.service"
+echo "    sudo systemctl start gold-4h-breakout.service"
 echo ""
 echo "  Watch logs:"
 echo "    tail -f $PROJECT_LOCATION/Logs/GOLD_MARKET.log"

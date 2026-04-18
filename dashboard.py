@@ -1,180 +1,309 @@
-
 import streamlit as st
 import json
 import os
 import pandas as pd
-import time
 from datetime import datetime
-from Core.market_data import MarketData
-from Core.instrument_manager import InstrumentManager
 
-# Set Page Config
-st.set_page_config(page_title="Gold 4H Breakout Dashboard", layout="wide")
+st.set_page_config(
+    page_title="Gold 4H Breakout",
+    page_icon="🏆",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-# Custom CSS for Premium Look
 st.markdown("""
-    <style>
-    .main {
-        background-color: #0e1117;
-    }
-    .metric-card {
-        background-color: #1e2130;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.5);
-    }
-    .stMetric {
-        background-color: #1e2126;
-        padding: 15px;
-        border-radius: 8px;
-    }
-    </style>
+<style>
+[data-testid="stMetricValue"] { font-size: 1.4rem; }
+.log-box {
+    background: #0d1117;
+    color: #c9d1d9;
+    font-family: monospace;
+    font-size: 0.78rem;
+    padding: 12px;
+    border-radius: 6px;
+    height: 420px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+.status-pill-active  { background:#1a4731; color:#3fb950; padding:3px 10px; border-radius:12px; font-weight:600; }
+.status-pill-none    { background:#21262d; color:#8b949e; padding:3px 10px; border-radius:12px; }
+.status-pill-pending { background:#3d2b00; color:#e3b341; padding:3px 10px; border-radius:12px; }
+</style>
 """, unsafe_allow_html=True)
 
-# Helper to load JSON safely
-def load_json(path, default=[]):
+# ── Paths ────────────────────────────────────────────────────────────────────
+STATE_PATH   = "Data/trading_state.json"
+PNL_PATH     = "Data/paper_pnl.json"
+ORDERS_PATH  = "Data/paper_orders.json"
+SESSION_PATH = "Data/session_levels.json"
+LOG_MARKET   = "Logs/GOLD_MARKET.log"
+LOG_SESSION  = "Logs/SESSION_REPORTS.log"
+LOG_CONSOLE  = "Logs/console_output.log"
+LOG_STARTUP  = "Logs/startup_log.txt"
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+def load_json(path, default):
     if os.path.exists(path):
         try:
-            with open(path, 'r') as f:
+            with open(path, "r") as f:
                 return json.load(f)
         except Exception:
-            return default
+            pass
     return default
 
-# Data Paths
-STATE_PATH = "Data/trading_state.json"
-PNL_PATH = "Data/paper_pnl.json"
-ORDERS_PATH = "Data/paper_orders.json"
-SESSION_PATH = "Data/session_levels.json"
+def read_log(path, lines=300):
+    if not os.path.exists(path):
+        return f"[File not found: {path}]"
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            all_lines = f.readlines()
+        return "".join(all_lines[-lines:])
+    except Exception as e:
+        return f"[Error reading log: {e}]"
 
-def main():
-    st.title("🏆 Gold 4H Breakout Strategy Dashboard")
-    
-    # Auto-refresh check
-    refresh_rate = st.sidebar.slider("Refresh Interval (seconds)", 5, 60, 10)
-    
-    # --- Current Market Info ---
-    im = InstrumentManager()
-    md = MarketData()
-    
-    # Load State
-    state = load_json(STATE_PATH, {})
-    active_contract = state.get("instrument")
-    
-    if not active_contract:
-        # Fallback if no state
-        # In actual live trading, you might want to fetch the current active contract
-        active_contract = "MCX_FO|477176" # Placeholder or dynamic fetch
+def pnl_color(val):
+    if val > 0: return "green"
+    if val < 0: return "red"
+    return "grey"
 
-    # Fetch LTP
-    ltp = md.fetcher.fetch_ltp(active_contract)
-    
-    # Display Status Header
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("LTP (Gold)", f"{ltp if ltp else 'N/A'}")
-    with col2:
-        status = "Active Session" if ltp else "Exchange Closed / No Token"
-        st.metric("System Status", status)
-    with col3:
-        st.metric("Active Trade", state.get("triggered_side", "NONE"))
-    with col4:
-        st.metric("Last Updated", state.get("last_updated", "N/A"))
+def fmt_inr(val):
+    return f"₹{val:,.2f}"
 
-    # --- P&L Section ---
-    st.header("📈 Performance & P&L")
-    pnl_data = load_json(PNL_PATH, {"initial_capital": 100000, "realized_pnl": 0, "current_balance": 100000})
-    
-    # Calculate Unrealized
-    orders = load_json(ORDERS_PATH, [])
-    active_orders = [o for o in orders if o.get("status") == "ACTIVE"]
-    unrealized_pnl = 0
-    if ltp:
-        for order in active_orders:
-            side = order.get("side")
-            entry = order.get("entry_price")
-            qty = order.get("qty", 1)
-            if side == "BUY":
-                unrealized_pnl += (ltp - entry) * qty
-            else:
-                unrealized_pnl += (entry - ltp) * qty
-    
-    realized_pnl = pnl_data.get("realized_pnl", 0)
-    total_pnl = realized_pnl + unrealized_pnl
-    
+# ── Sidebar ──────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.title("🏆 Gold 4H Bot")
+    st.caption("Live Dashboard")
+    st.divider()
+    refresh = st.slider("Auto-refresh (sec)", 5, 120, 15)
+    log_lines = st.slider("Log lines to show", 50, 500, 200, step=50)
+    st.divider()
+    if st.button("🔄 Refresh Now"):
+        st.rerun()
+    st.caption(f"Last loaded: {datetime.now().strftime('%H:%M:%S')}")
+
+# ── Load data ────────────────────────────────────────────────────────────────
+state   = load_json(STATE_PATH,   {})
+pnl     = load_json(PNL_PATH,     {"initial_capital": 100000, "current_balance": 100000, "realized_pnl": 0, "trades": []})
+orders  = load_json(ORDERS_PATH,  [])
+sessions = load_json(SESSION_PATH, [])
+
+# ── Header status bar ────────────────────────────────────────────────────────
+st.title("Gold 4H Breakout — Dashboard")
+
+triggered_side = state.get("triggered_side") or "NONE"
+entry_price    = state.get("entry_price", "—")
+instrument     = state.get("instrument", "—")
+last_updated   = state.get("last_updated", "—")
+paper_mode     = state.get("paper_mode", True)
+
+col1, col2, col3, col4, col5 = st.columns(5)
+col1.metric("Mode",         "📄 Paper" if paper_mode else "🔴 Live")
+col2.metric("Active Trade", triggered_side)
+col3.metric("Entry Price",  f"₹{entry_price}" if isinstance(entry_price, (int, float)) else entry_price)
+col4.metric("Instrument",   instrument)
+col5.metric("Last Updated", last_updated)
+
+st.divider()
+
+# ── Tabs ─────────────────────────────────────────────────────────────────────
+tab_pnl, tab_orders, tab_state, tab_sessions, tab_mktlog, tab_seslog, tab_console, tab_startup = st.tabs([
+    "📈 P&L",
+    "📋 Orders",
+    "⚙️ Trading State",
+    "🕒 Session Levels",
+    "📜 Market Log",
+    "📊 Session Reports",
+    "🖥️ Console",
+    "🚀 Startup Log",
+])
+
+# ═══════════════════════════════════════════════════════════════
+# TAB 1 — P&L
+# ═══════════════════════════════════════════════════════════════
+with tab_pnl:
+    initial  = pnl.get("initial_capital", 100000)
+    realized = pnl.get("realized_pnl", 0.0)
+    balance  = pnl.get("current_balance", initial)
+    trades   = pnl.get("trades", [])
+    roi      = (realized / initial * 100) if initial else 0
+
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Initial Capital", f"₹{pnl_data['initial_capital']:,}")
-    c2.metric("Realized P&L", f"₹{realized_pnl:,}", delta=f"{realized_pnl}", delta_color="normal")
-    c3.metric("Unrealized P&L", f"₹{unrealized_pnl:,.2f}", delta=f"{unrealized_pnl:.2f}")
-    c4.metric("Total P&L", f"₹{total_pnl:,.2f}", delta=f"{(total_pnl/pnl_data['initial_capital']*100):.2f}% (ROI)")
+    c1.metric("Initial Capital",  fmt_inr(initial))
+    c2.metric("Current Balance",  fmt_inr(balance),  delta=fmt_inr(balance - initial))
+    c3.metric("Realized P&L",     fmt_inr(realized), delta=f"{roi:.2f}% ROI")
+    c4.metric("Closed Trades",    len(trades))
 
-    # --- Active Position & GTTs ---
-    col_pos, col_gtt = st.columns([1, 1])
-    
-    with col_pos:
-        st.subheader("📍 Running Position")
-        if state.get("triggered_side"):
-            pos_info = {
-                "Instrument": active_contract,
-                "Side": state["triggered_side"],
-                "Entry Price": state.get("entry_price"),
-                "Current Price": ltp,
-                "Last Sync": state.get("last_updated")
-            }
-            st.json(pos_info)
-        else:
-            st.info("No active trade currently running.")
+    st.divider()
 
-    with col_gtt:
-        st.subheader("🛡️ Active GTT Monitoring")
-        if state.get("gtts"):
-            gtt_table = []
-            for side, types in state["gtts"].items():
-                for t, g_id in types.items():
-                    if g_id:
-                        gtt_table.append({"Side": side, "Type": t, "GTT ID": g_id})
-            if gtt_table:
-                st.table(pd.DataFrame(gtt_table))
-            else:
-                st.write("No GTTs placed.")
-        else:
-            st.write("No GTTs in state.")
+    if trades:
+        df_trades = pd.DataFrame(trades)
+        df_trades["date"] = pd.to_datetime(df_trades["date"], errors="coerce")
+        df_trades = df_trades.sort_values("date", ascending=False)
 
-    # --- Session History ---
-    st.header("🕒 Session Levels History")
-    sessions = load_json(SESSION_PATH, [])
-    if sessions:
-        # Show last 10 sessions in a table
-        session_df = []
-        for s in reversed(sessions[-10:]):
-            session_df.append({
-                "Timestamp": s.get("timestamp"),
-                "Session": s.get("session"),
-                "High": s.get("high"),
-                "Low": s.get("low"),
-                "Buy Entry": s.get("plan", {}).get("BUY", {}).get("entry"),
-                "Sell Entry": s.get("plan", {}).get("SELL", {}).get("entry")
-            })
-        st.dataframe(pd.DataFrame(session_df), use_container_width=True)
+        # Cumulative P&L chart
+        df_chart = df_trades.sort_values("date").copy()
+        df_chart["cumulative_pnl"] = df_chart["pnl"].cumsum()
+        st.subheader("Cumulative P&L")
+        st.line_chart(df_chart.set_index("date")["cumulative_pnl"])
+
+        st.subheader("Trade History")
+        st.dataframe(
+            df_trades[["id", "side", "pnl", "reason", "date"]].rename(columns={
+                "id": "Order ID", "side": "Side", "pnl": "P&L (₹)",
+                "reason": "Exit Reason", "date": "Closed At"
+            }),
+            use_container_width=True,
+        )
     else:
-        st.write("No session levels recorded yet.")
+        st.info("No closed trades yet.")
 
-    # --- Recent Paper Orders ---
-    st.header("📜 Recent Trade History")
+# ═══════════════════════════════════════════════════════════════
+# TAB 2 — Orders
+# ═══════════════════════════════════════════════════════════════
+with tab_orders:
     if orders:
-        order_df = pd.DataFrame(orders).tail(10)
-        # Select key columns
-        cols = ["id", "side", "status", "entry_price", "exit_price", "pnl", "closed_at", "exit_reason"]
-        available_cols = [c for c in cols if c in order_df.columns]
-        st.dataframe(order_df[available_cols].sort_index(ascending=False), use_container_width=True)
+        df_orders = pd.DataFrame(orders)
 
-    # Footer
-    st.markdown("---")
-    st.caption(f"Last UI Refresh: {datetime.now().strftime('%H:%M:%S')}")
+        # Status filter
+        statuses = ["ALL"] + sorted(df_orders["status"].unique().tolist())
+        sel = st.selectbox("Filter by Status", statuses)
+        if sel != "ALL":
+            df_orders = df_orders[df_orders["status"] == sel]
 
-    # Re-run after interval
-    time.sleep(refresh_rate)
-    st.rerun()
+        # Column selection
+        cols_want = ["id", "side", "status", "entry_price", "sl_price", "target_price",
+                     "qty", "placed_at", "filled_at", "closed_at", "exit_reason", "exit_price", "pnl"]
+        cols_avail = [c for c in cols_want if c in df_orders.columns]
 
-if __name__ == "__main__":
-    main()
+        st.dataframe(
+            df_orders[cols_avail].sort_values("placed_at", ascending=False)
+            .rename(columns={
+                "id": "Order ID", "side": "Side", "status": "Status",
+                "entry_price": "Entry", "sl_price": "SL", "target_price": "Target",
+                "qty": "Qty", "placed_at": "Placed", "filled_at": "Filled",
+                "closed_at": "Closed", "exit_reason": "Exit Reason",
+                "exit_price": "Exit Price", "pnl": "P&L (₹)"
+            }),
+            use_container_width=True,
+        )
+
+        # Summary counts
+        s_counts = df_orders["status"].value_counts()
+        cc = st.columns(len(s_counts))
+        for i, (s, n) in enumerate(s_counts.items()):
+            cc[i].metric(s, n)
+    else:
+        st.info("No orders found.")
+
+# ═══════════════════════════════════════════════════════════════
+# TAB 3 — Trading State
+# ═══════════════════════════════════════════════════════════════
+with tab_state:
+    if state:
+        # Key fields as metrics
+        st.subheader("Key State")
+        k1, k2, k3 = st.columns(3)
+        k1.metric("Triggered Side",  state.get("triggered_side", "NONE"))
+        k2.metric("Entry Price",     state.get("entry_price", "—"))
+        k3.metric("Instrument",      state.get("instrument", "—"))
+
+        k4, k5, k6 = st.columns(3)
+        k4.metric("Strategy Mode",   state.get("strategy_mode", "—"))
+        k5.metric("Session",         state.get("current_session", "—"))
+        k6.metric("Paper Mode",      str(state.get("paper_mode", "—")))
+
+        # GTT Table
+        gtts = state.get("gtts")
+        if gtts:
+            st.subheader("GTT Orders in State")
+            gtt_rows = []
+            for side, types in gtts.items():
+                if isinstance(types, dict):
+                    for t, gid in types.items():
+                        gtt_rows.append({"Side": side, "Type": t, "GTT ID": gid or "—"})
+            if gtt_rows:
+                st.table(pd.DataFrame(gtt_rows))
+
+        st.subheader("Raw State JSON")
+        st.json(state)
+    else:
+        st.info("Trading state is empty — bot may not have run yet.")
+
+# ═══════════════════════════════════════════════════════════════
+# TAB 4 — Session Levels
+# ═══════════════════════════════════════════════════════════════
+with tab_sessions:
+    if sessions:
+        st.subheader(f"Last {min(len(sessions), 20)} Sessions")
+
+        rows = []
+        for s in reversed(sessions[-20:]):
+            plan = s.get("plan", {})
+            buy  = plan.get("BUY", {})
+            sell = plan.get("SELL", {})
+            rows.append({
+                "Timestamp":   s.get("timestamp"),
+                "Session":     s.get("session"),
+                "High":        s.get("high"),
+                "Low":         s.get("low"),
+                "BUY Entry":   buy.get("entry"),
+                "BUY SL":      buy.get("sl_1"),
+                "BUY Target":  buy.get("target"),
+                "SELL Entry":  sell.get("entry"),
+                "SELL SL":     sell.get("sl_1"),
+                "SELL Target": sell.get("target"),
+            })
+
+        st.dataframe(pd.DataFrame(rows), use_container_width=True)
+
+        # Latest session detail
+        with st.expander("Latest Session Full JSON"):
+            st.json(sessions[-1])
+    else:
+        st.info("No session levels recorded yet.")
+
+# ═══════════════════════════════════════════════════════════════
+# TAB 5 — Gold Market Log
+# ═══════════════════════════════════════════════════════════════
+with tab_mktlog:
+    st.subheader("GOLD_MARKET.log")
+    content = read_log(LOG_MARKET, log_lines)
+    st.markdown(f'<div class="log-box">{content}</div>', unsafe_allow_html=True)
+    with st.expander("Download log"):
+        st.download_button("⬇ Download", content, file_name="GOLD_MARKET.log")
+
+# ═══════════════════════════════════════════════════════════════
+# TAB 6 — Session Reports Log
+# ═══════════════════════════════════════════════════════════════
+with tab_seslog:
+    st.subheader("SESSION_REPORTS.log")
+    content = read_log(LOG_SESSION, log_lines)
+    st.markdown(f'<div class="log-box">{content}</div>', unsafe_allow_html=True)
+    with st.expander("Download log"):
+        st.download_button("⬇ Download", content, file_name="SESSION_REPORTS.log")
+
+# ═══════════════════════════════════════════════════════════════
+# TAB 7 — Console Output
+# ═══════════════════════════════════════════════════════════════
+with tab_console:
+    st.subheader("console_output.log")
+    content = read_log(LOG_CONSOLE, log_lines)
+    st.markdown(f'<div class="log-box">{content}</div>', unsafe_allow_html=True)
+    with st.expander("Download log"):
+        st.download_button("⬇ Download", content, file_name="console_output.log")
+
+# ═══════════════════════════════════════════════════════════════
+# TAB 8 — Startup Log
+# ═══════════════════════════════════════════════════════════════
+with tab_startup:
+    st.subheader("startup_log.txt")
+    content = read_log(LOG_STARTUP, log_lines)
+    st.markdown(f'<div class="log-box">{content}</div>', unsafe_allow_html=True)
+    with st.expander("Download log"):
+        st.download_button("⬇ Download", content, file_name="startup_log.txt")
+
+# ── Auto-refresh ─────────────────────────────────────────────────────────────
+import time
+time.sleep(refresh)
+st.rerun()
