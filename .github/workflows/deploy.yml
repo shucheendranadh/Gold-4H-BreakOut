@@ -51,11 +51,7 @@ jobs:
             # ── 3. Write runtime config from GitHub variables ────────────────────
             echo "==> Writing runtime config..."
             sudo mkdir -p /etc/gold-bot
-            sudo tee /etc/gold-bot/runtime.env > /dev/null <<EOF
-TOTAL_LOTS=${{ vars.TOTAL_LOTS }}
-ENABLE_PAPER_TRADING=${{ vars.ENABLE_PAPER_TRADING }}
-INITIAL_PAPER_CAPITAL=${{ vars.INITIAL_PAPER_CAPITAL }}
-EOF
+            printf 'TOTAL_LOTS=${{ vars.TOTAL_LOTS }}\nENABLE_PAPER_TRADING=${{ vars.ENABLE_PAPER_TRADING }}\nINITIAL_PAPER_CAPITAL=${{ vars.INITIAL_PAPER_CAPITAL }}\n' | sudo tee /etc/gold-bot/runtime.env > /dev/null
             sudo chmod 644 /etc/gold-bot/runtime.env
 
             # ── 4. Restart the bot service ───────────────────────────────────────
