@@ -15,7 +15,7 @@ jobs:
       - name: SSH Deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ vars.AWS_HOST }}
+          host: ${{ secrets.AWS_HOST }}
           username: ${{ vars.AWS_USERNAME }}
           key: ${{ secrets.AWS_SSH_KEY }}
           # Increase timeout for first-time setup (apt-get + pip can be slow)
