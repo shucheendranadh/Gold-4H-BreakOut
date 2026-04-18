@@ -1,0 +1,70 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to AWS Linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH Deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.AWS_HOST }}
+          username: ${{ vars.AWS_USERNAME }}
+          key: ${{ secrets.AWS_SSH_KEY }}
+          # Increase timeout for first-time setup (apt-get + pip can be slow)
+          command_timeout: 10m
+          script: |
+            set -e
+
+            PROJECT_DIR="${{ vars.PROJECT_LOCATION }}"
+            REPO_URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+
+            # ── 1. Clone on first deploy, pull on subsequent deploys ────────────
+            if [ ! -d "$PROJECT_DIR/.git" ]; then
+              echo "==> First deployment: cloning repository..."
+              mkdir -p "$PROJECT_DIR"
+              git clone "$REPO_URL" "$PROJECT_DIR"
+            else
+              echo "==> Pulling latest code..."
+              cd "$PROJECT_DIR"
+              # Update remote URL in case token changed
+              git remote set-url origin "$REPO_URL"
+              git fetch origin main
+              git reset --hard origin/main
+            fi
+
+            # ── 2. Run setup script (idempotent — safe on every deploy) ─────────
+            echo "==> Running setup script..."
+            cd "$PROJECT_DIR"
+            chmod +x scripts/setup_aws.sh
+            sudo bash scripts/setup_aws.sh \
+              --project "$PROJECT_DIR" \
+              --user    "${{ vars.AWS_USERNAME }}"
+
+            # ── 3. Write runtime config from GitHub variables ────────────────────
+            echo "==> Writing runtime config..."
+            sudo mkdir -p /etc/gold-bot
+            sudo tee /etc/gold-bot/runtime.env > /dev/null <<EOF
+TOTAL_LOTS=${{ vars.TOTAL_LOTS }}
+ENABLE_PAPER_TRADING=${{ vars.ENABLE_PAPER_TRADING }}
+INITIAL_PAPER_CAPITAL=${{ vars.INITIAL_PAPER_CAPITAL }}
+EOF
+            sudo chmod 644 /etc/gold-bot/runtime.env
+
+            # ── 4. Restart the bot service ───────────────────────────────────────
+            echo "==> Restarting gold-bot service..."
+            sudo systemctl daemon-reload
+            sudo systemctl restart gold-bot.service || true
+
+            echo ""
+            sudo systemctl status gold-bot.service --no-pager --lines=5 || true
+
+            echo ""
+            echo "==> Deployment complete."

@@ -1,0 +1,6 @@
+requests==2.31.0
+python-dotenv
+pytest
+
+# Built-in libraries (no install needed):
+# json, logging, os, sys, time, datetime, gzip, shutil, urllib

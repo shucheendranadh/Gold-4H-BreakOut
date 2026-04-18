@@ -1,0 +1,17 @@
+[Unit]
+Description=GOLD 4H Breakout Trading Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USERNAME__
+WorkingDirectory=__PROJECT_LOCATION__
+EnvironmentFile=/etc/gold-bot/runtime.env
+ExecStart=__PROJECT_LOCATION__/venv/bin/python main.py
+Restart=no
+StandardOutput=append:__PROJECT_LOCATION__/Logs/console_output.log
+StandardError=append:__PROJECT_LOCATION__/Logs/console_output.log
+
+[Install]
+WantedBy=multi-user.target
