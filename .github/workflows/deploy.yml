@@ -3,7 +3,7 @@ name: Deploy to AWS
 on:
   push:
     branches:
-      - main
+      - develop
   workflow_dispatch:
 
 jobs:
@@ -36,8 +36,8 @@ jobs:
               cd "$PROJECT_DIR"
               # Update remote URL in case token changed
               git remote set-url origin "$REPO_URL"
-              git fetch origin main
-              git reset --hard origin/main
+              git fetch origin ${{ github.ref_name }}
+              git reset --hard origin/${{ github.ref_name }}
             fi
 
             # ── 2. Run setup script (idempotent — safe on every deploy) ─────────
