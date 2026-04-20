@@ -1,0 +1,17 @@
+[Unit]
+Description=GOLD Bot Dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USERNAME__
+WorkingDirectory=__PROJECT_LOCATION__
+ExecStart=__PROJECT_LOCATION__/venv/bin/streamlit run dashboard.py --server.port 8508 --server.address 0.0.0.0 --server.headless true
+Restart=always
+RestartSec=30
+StandardOutput=append:__PROJECT_LOCATION__/Logs/dashboard_output.log
+StandardError=append:__PROJECT_LOCATION__/Logs/dashboard_output.log
+
+[Install]
+WantedBy=multi-user.target

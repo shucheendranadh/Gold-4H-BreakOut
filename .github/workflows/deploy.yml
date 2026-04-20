@@ -66,15 +66,17 @@ jobs:
             echo "==> Current service status..."
             sudo systemctl status gold-4h-breakout.service --no-pager || echo "Service not running."
             
-            # ── 5. Restart the bot service ───────────────────────────────────────
-            echo "==> Restarting gold-bot service with new code..."
+            # ── 5. Restart the bot services ───────────────────────────────────────
+            echo "==> Restarting gold-bot services with new code..."
             sudo systemctl daemon-reload
             sudo systemctl restart gold-4h-breakout.service || true
+            sudo systemctl restart gold-dashboard.service || true
 
             echo ""
             echo "==> Verifying service health..."
             sleep 2
             sudo systemctl status gold-4h-breakout.service --no-pager --lines=20 || true
+            sudo systemctl status gold-dashboard.service --no-pager --lines=20 || true
 
             echo ""
             echo "==> Recent Logs (GOLD_MARKET.log):"

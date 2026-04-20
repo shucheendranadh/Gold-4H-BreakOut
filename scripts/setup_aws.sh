@@ -115,7 +115,16 @@ sed -i "s|__PROJECT_LOCATION__|$PROJECT_LOCATION|g"  "$SERVICE_FILE"
 
 systemctl daemon-reload
 systemctl enable gold-4h-breakout.service 2>/dev/null || true
-echo "  Service installed and enabled at $SERVICE_FILE"
+echo "  Bot service installed and enabled at $SERVICE_FILE"
+
+# --- Dashboard Service ---
+DASH_SERVICE_FILE="/etc/systemd/system/gold-dashboard.service"
+cp "$PROJECT_LOCATION/scripts/gold-dashboard.service" "$DASH_SERVICE_FILE"
+sed -i "s|__USERNAME__|$RUN_USER|g"                  "$DASH_SERVICE_FILE"
+sed -i "s|__PROJECT_LOCATION__|$PROJECT_LOCATION|g"  "$DASH_SERVICE_FILE"
+systemctl daemon-reload
+systemctl enable gold-dashboard.service 2>/dev/null || true
+echo "  Dashboard service installed and enabled at $DASH_SERVICE_FILE"
 
 # ── STEP 5: Cron job — start bot at 09:00 IST (03:30 UTC) Mon-Fri ──────────────
 echo "[6/6] Installing daily cron job (09:00 IST / 03:30 UTC, Mon-Fri)..."
