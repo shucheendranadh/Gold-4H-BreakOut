@@ -54,13 +54,31 @@ jobs:
             printf 'TOTAL_LOTS=${{ vars.TOTAL_LOTS }}\nENABLE_PAPER_TRADING=${{ vars.ENABLE_PAPER_TRADING }}\nINITIAL_PAPER_CAPITAL=${{ vars.INITIAL_PAPER_CAPITAL }}\n' | sudo tee /etc/gold-bot/runtime.env > /dev/null
             sudo chmod 644 /etc/gold-bot/runtime.env
 
-            # ── 4. Restart the bot service ───────────────────────────────────────
-            echo "==> Restarting gold-bot service..."
+            # ── 3.5 Check Token ───────────────────────────────────────────────
+            echo "==> Checking Upstox Token..."
+            if [ -f "/home/${{ vars.AWS_USERNAME }}/tradingbridge/.token.env" ]; then
+                echo "Token file found."
+            else
+                echo "::warning title=Missing Token::Token file NOT found at /home/${{ vars.AWS_USERNAME }}/tradingbridge/.token.env"
+            fi
+
+            # ── 4. Diagnostics before update ─────────────────────────────────────
+            echo "==> Current service status..."
+            sudo systemctl status gold-4h-breakout.service --no-pager || echo "Service not running."
+            
+            # ── 5. Restart the bot service ───────────────────────────────────────
+            echo "==> Restarting gold-bot service with new code..."
             sudo systemctl daemon-reload
             sudo systemctl restart gold-4h-breakout.service || true
 
             echo ""
-            sudo systemctl status gold-4h-breakout.service --no-pager --lines=5 || true
+            echo "==> Verifying service health..."
+            sleep 2
+            sudo systemctl status gold-4h-breakout.service --no-pager --lines=20 || true
+
+            echo ""
+            echo "==> Recent Logs (GOLD_MARKET.log):"
+            tail -n 20 "$PROJECT_DIR/Logs/GOLD_MARKET.log" || echo "Log file not found."
 
             echo ""
             echo "==> Deployment complete."

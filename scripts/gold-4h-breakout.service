@@ -9,7 +9,8 @@ User=__USERNAME__
 WorkingDirectory=__PROJECT_LOCATION__
 EnvironmentFile=/etc/gold-bot/runtime.env
 ExecStart=__PROJECT_LOCATION__/venv/bin/python main.py
-Restart=no
+Restart=always
+RestartSec=30
 StandardOutput=append:__PROJECT_LOCATION__/Logs/console_output.log
 StandardError=append:__PROJECT_LOCATION__/Logs/console_output.log
 

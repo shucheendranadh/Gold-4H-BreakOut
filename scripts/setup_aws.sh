@@ -114,8 +114,8 @@ sed -i "s|__USERNAME__|$RUN_USER|g"                  "$SERVICE_FILE"
 sed -i "s|__PROJECT_LOCATION__|$PROJECT_LOCATION|g"  "$SERVICE_FILE"
 
 systemctl daemon-reload
-systemctl disable gold-4h-breakout.service 2>/dev/null || true
-echo "  Service installed at $SERVICE_FILE"
+systemctl enable gold-4h-breakout.service 2>/dev/null || true
+echo "  Service installed and enabled at $SERVICE_FILE"
 
 # ── STEP 5: Cron job — start bot at 09:00 IST (03:30 UTC) Mon-Fri ──────────────
 echo "[6/6] Installing daily cron job (09:00 IST / 03:30 UTC, Mon-Fri)..."
