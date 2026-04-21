@@ -62,11 +62,19 @@ jobs:
                 echo "::warning title=Missing Token::Token file NOT found at /home/${{ vars.AWS_USERNAME }}/tradingbridge/.token.env"
             fi
 
-            # ── 4. Diagnostics before update ─────────────────────────────────────
+            # ── 4. Install / sync Python dependencies ────────────────────────────
+            echo "==> Installing Python dependencies..."
+            cd "$PROJECT_DIR"
+            source venv/bin/activate
+            pip install -q --upgrade pip
+            pip install -q -r requirements.txt
+            deactivate
+
+            # ── 5. Diagnostics before update ─────────────────────────────────────
             echo "==> Current service status..."
             sudo systemctl status gold-4h-breakout.service --no-pager || echo "Service not running."
-            
-            # ── 5. Restart the bot services ───────────────────────────────────────
+
+            # ── 6. Restart the bot services ───────────────────────────────────────
             echo "==> Restarting gold-bot services with new code..."
             sudo systemctl daemon-reload
             sudo systemctl restart gold-4h-breakout.service || true

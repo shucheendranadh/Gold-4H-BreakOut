@@ -1,6 +1,9 @@
 requests==2.31.0
 python-dotenv
 pytest
+pandas
+numpy
+streamlit
 
 # Built-in libraries (no install needed):
 # json, logging, os, sys, time, datetime, gzip, shutil, urllib
