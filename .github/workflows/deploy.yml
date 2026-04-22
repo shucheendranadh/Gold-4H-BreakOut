@@ -18,10 +18,18 @@ jobs:
           host: ${{ secrets.AWS_HOST }}
           username: ${{ vars.AWS_USERNAME }}
           key: ${{ secrets.AWS_SSH_KEY }}
-          # Increase timeout for first-time setup (apt-get + pip can be slow)
-          command_timeout: 10m
+          # pandas/numpy/streamlit installs can take 15+ min on first run
+          command_timeout: 20m
           script: |
             set -e
+
+            # ── 0. Fix sudoers syntax error (missing username prefix) ─────────────
+            SUDOERS_FILE="/etc/sudoers.d/pdh_permissions"
+            if [ -f "$SUDOERS_FILE" ] && sudo grep -q "^ALL=(ALL)" "$SUDOERS_FILE" 2>/dev/null; then
+              echo "==> Fixing sudoers syntax error in $SUDOERS_FILE..."
+              sudo sed -i "s/^ALL=(ALL)/${{ vars.AWS_USERNAME }} ALL=(ALL)/" "$SUDOERS_FILE"
+              echo "  Fixed."
+            fi
 
             PROJECT_DIR="${{ vars.PROJECT_LOCATION }}"
             REPO_URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
@@ -62,19 +70,11 @@ jobs:
                 echo "::warning title=Missing Token::Token file NOT found at /home/${{ vars.AWS_USERNAME }}/tradingbridge/.token.env"
             fi
 
-            # ── 4. Install / sync Python dependencies ────────────────────────────
-            echo "==> Installing Python dependencies..."
-            cd "$PROJECT_DIR"
-            source venv/bin/activate
-            pip install -q --upgrade pip
-            pip install -q -r requirements.txt
-            deactivate
-
-            # ── 5. Diagnostics before update ─────────────────────────────────────
+            # ── 4. Diagnostics before update ─────────────────────────────────────
             echo "==> Current service status..."
             sudo systemctl status gold-4h-breakout.service --no-pager || echo "Service not running."
 
-            # ── 6. Restart the bot services ───────────────────────────────────────
+            # ── 5. Restart the bot services ───────────────────────────────────────
             echo "==> Restarting gold-bot services with new code..."
             sudo systemctl daemon-reload
             sudo systemctl restart gold-4h-breakout.service || true
