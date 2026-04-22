@@ -56,6 +56,23 @@ else
     echo "[1/6] Skipping system packages (already installed)."
 fi
 
+# ── STEP 1.5: Swap file (prevents OOM kill during pip install on low-RAM servers) ─
+SWAPFILE=/swapfile
+if ! swapon --show | grep -q "$SWAPFILE"; then
+    echo "  Creating 1 GB swap file at $SWAPFILE..."
+    if fallocate -l 1G "$SWAPFILE" 2>/dev/null; then
+        :
+    else
+        dd if=/dev/zero of="$SWAPFILE" bs=1M count=1024 status=none
+    fi
+    chmod 600 "$SWAPFILE"
+    mkswap -q "$SWAPFILE"
+    swapon "$SWAPFILE"
+    echo "  Swap enabled."
+else
+    echo "  Swap already active — skipping."
+fi
+
 # ── STEP 2: Python virtual environment ────────────────────────────────────────
 echo "[2/6] Setting up Python virtual environment..."
 cd "$PROJECT_LOCATION"
@@ -67,7 +84,7 @@ fi
 
 source venv/bin/activate
 pip install -q --upgrade pip
-pip install -q -r requirements.txt
+pip install -q --no-cache-dir -r requirements.txt
 deactivate
 echo "  Dependencies installed."
 
