@@ -26,7 +26,8 @@ class Guardian:
         self.signal_engine = SignalEngine()
         self.cancel_gtts_tool = CancelGTTs()
         self.fetcher = HistoricalDataFetcher()
-        self.price_history = deque() # Stores tuples of (timestamp, price)
+        # maxlen caps memory if pruning ever lags; LOOKBACK*60 = max 1 entry/sec
+        self.price_history = deque(maxlen=GUARDIAN_LOOKBACK_MINUTES * 60)
 
     def measure_crash_metrics(self, current_price, triggered_side):
         """

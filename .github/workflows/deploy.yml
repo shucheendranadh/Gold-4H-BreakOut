@@ -23,16 +23,22 @@ jobs:
           script: |
             set -e
 
+            # ── Resolve all GitHub Actions variables into bash variables ──────────
+            RUN_USER="${{ vars.AWS_USERNAME }}"
+            PROJECT_DIR="${{ vars.PROJECT_LOCATION }}"
+            REPO_URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+            BRANCH="${{ github.ref_name }}"
+            TOTAL_LOTS="${{ vars.TOTAL_LOTS }}"
+            ENABLE_PAPER_TRADING="${{ vars.ENABLE_PAPER_TRADING }}"
+            INITIAL_PAPER_CAPITAL="${{ vars.INITIAL_PAPER_CAPITAL }}"
+
             # ── 0. Fix sudoers syntax error (missing username prefix) ─────────────
             SUDOERS_FILE="/etc/sudoers.d/pdh_permissions"
             if [ -f "$SUDOERS_FILE" ] && sudo grep -q "^ALL=(ALL)" "$SUDOERS_FILE" 2>/dev/null; then
               echo "==> Fixing sudoers syntax error in $SUDOERS_FILE..."
-              sudo sed -i "s/^ALL=(ALL)/${{ vars.AWS_USERNAME }} ALL=(ALL)/" "$SUDOERS_FILE"
+              sudo sed -i "s|^ALL=(ALL)|$RUN_USER ALL=(ALL)|" "$SUDOERS_FILE"
               echo "  Fixed."
             fi
-
-            PROJECT_DIR="${{ vars.PROJECT_LOCATION }}"
-            REPO_URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
 
             # ── 1. Clone on first deploy, pull on subsequent deploys ────────────
             if [ ! -d "$PROJECT_DIR/.git" ]; then
@@ -42,10 +48,9 @@ jobs:
             else
               echo "==> Pulling latest code..."
               cd "$PROJECT_DIR"
-              # Update remote URL in case token changed
               git remote set-url origin "$REPO_URL"
-              git fetch origin ${{ github.ref_name }}
-              git reset --hard origin/${{ github.ref_name }}
+              git fetch origin "$BRANCH"
+              git reset --hard "origin/$BRANCH"
             fi
 
             # ── 2. Run setup script (idempotent — safe on every deploy) ─────────
@@ -54,20 +59,23 @@ jobs:
             chmod +x scripts/setup_aws.sh
             sudo bash scripts/setup_aws.sh \
               --project "$PROJECT_DIR" \
-              --user    "${{ vars.AWS_USERNAME }}"
+              --user    "$RUN_USER"
 
             # ── 3. Write runtime config from GitHub variables ────────────────────
             echo "==> Writing runtime config..."
             sudo mkdir -p /etc/gold-bot
-            printf 'TOTAL_LOTS=${{ vars.TOTAL_LOTS }}\nENABLE_PAPER_TRADING=${{ vars.ENABLE_PAPER_TRADING }}\nINITIAL_PAPER_CAPITAL=${{ vars.INITIAL_PAPER_CAPITAL }}\n' | sudo tee /etc/gold-bot/runtime.env > /dev/null
+            printf 'TOTAL_LOTS=%s\nENABLE_PAPER_TRADING=%s\nINITIAL_PAPER_CAPITAL=%s\n' \
+              "$TOTAL_LOTS" "$ENABLE_PAPER_TRADING" "$INITIAL_PAPER_CAPITAL" \
+              | sudo tee /etc/gold-bot/runtime.env > /dev/null
             sudo chmod 644 /etc/gold-bot/runtime.env
 
             # ── 3.5 Check Token ───────────────────────────────────────────────
             echo "==> Checking Upstox Token..."
-            if [ -f "/home/${{ vars.AWS_USERNAME }}/tradingbridge/.token.env" ]; then
+            TOKEN_FILE="/home/$RUN_USER/tradingbridge/.token.env"
+            if [ -f "$TOKEN_FILE" ]; then
                 echo "Token file found."
             else
-                echo "::warning title=Missing Token::Token file NOT found at /home/${{ vars.AWS_USERNAME }}/tradingbridge/.token.env"
+                echo "::warning title=Missing Token::Token file NOT found at $TOKEN_FILE"
             fi
 
             # ── 4. Diagnostics before update ─────────────────────────────────────

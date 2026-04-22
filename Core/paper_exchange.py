@@ -11,6 +11,7 @@ class PaperExchange:
     def __init__(self, orders_file="Data/paper_orders.json", pnl_file="Data/paper_pnl.json"):
         self.orders_file = orders_file
         self.pnl_file = pnl_file
+        self._orders_mem = None  # loaded once, kept in memory
         self._ensure_files()
         
     def _ensure_files(self):
@@ -31,12 +32,16 @@ class PaperExchange:
                 }, f)
 
     def _load_orders(self):
-        try:
-            with open(self.orders_file, 'r') as f:
-                return json.load(f)
-        except: return []
+        if self._orders_mem is None:
+            try:
+                with open(self.orders_file, 'r') as f:
+                    self._orders_mem = json.load(f)
+            except Exception:
+                self._orders_mem = []
+        return self._orders_mem
 
     def _save_orders(self, orders):
+        self._orders_mem = orders
         with open(self.orders_file, 'w') as f:
             json.dump(orders, f, indent=4)
 

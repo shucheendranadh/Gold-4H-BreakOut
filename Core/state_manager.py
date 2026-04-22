@@ -8,6 +8,8 @@ logger = logging.getLogger("GOLD_MAIN")
 class StateManager:
     def __init__(self, file_path="Data/trading_state.json"):
         self.file_path = file_path
+        self._cache = None
+        self._cache_mtime = -1
         self._ensure_dir()
 
     def _ensure_dir(self):
@@ -16,10 +18,11 @@ class StateManager:
             os.makedirs(directory)
 
     def save_state(self, state_data):
-        """Save the trading state to a JSON file."""
         try:
             with open(self.file_path, 'w') as f:
                 json.dump(state_data, f, indent=4)
+            self._cache = state_data
+            self._cache_mtime = os.path.getmtime(self.file_path)
             logger.info(f"Trading state saved to {self.file_path}")
             return True
         except Exception as e:
@@ -27,12 +30,16 @@ class StateManager:
             return False
 
     def load_state(self):
-        """Load the trading state from a JSON file."""
         if not os.path.exists(self.file_path):
             return {}
         try:
+            mtime = os.path.getmtime(self.file_path)
+            if self._cache is not None and mtime == self._cache_mtime:
+                return self._cache
             with open(self.file_path, 'r') as f:
-                return json.load(f)
+                self._cache = json.load(f)
+            self._cache_mtime = mtime
+            return self._cache
         except Exception as e:
             logger.error(f"Error loading trading state: {e}")
             return {}

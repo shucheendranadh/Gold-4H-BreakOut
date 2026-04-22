@@ -1,6 +1,7 @@
 import streamlit as st
 import json
 import os
+import time
 import pandas as pd
 from datetime import datetime
 
@@ -43,6 +44,7 @@ LOG_CONSOLE  = "Logs/console_output.log"
 LOG_STARTUP  = "Logs/startup_log.txt"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+@st.cache_data(ttl=10)
 def load_json(path, default):
     if os.path.exists(path):
         try:
@@ -52,6 +54,7 @@ def load_json(path, default):
             pass
     return default
 
+@st.cache_data(ttl=10)
 def read_log(path, lines=300):
     if not os.path.exists(path):
         return f"[File not found: {path}]"
@@ -304,6 +307,5 @@ with tab_startup:
         st.download_button("⬇ Download", content, file_name="startup_log.txt")
 
 # ── Auto-refresh ─────────────────────────────────────────────────────────────
-import time
 time.sleep(refresh)
 st.rerun()

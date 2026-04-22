@@ -108,16 +108,19 @@ class HistoricalDataFetcher:
                     logger.error(f"V2 Intraday Fetch Failed: {e}")
             
             # 3. Deduplicate and Sort
-            unique_candles = {c['timestamp']: c for c in cleaned_candles}
-            final_candles = list(unique_candles.values())
-            
+            seen = set()
+            final_candles = []
+            for c in cleaned_candles:
+                if c['timestamp'] not in seen:
+                    seen.add(c['timestamp'])
+                    final_candles.append(c)
+
             final_candles.sort(key=lambda x: x["timestamp"], reverse=True)
-            result_candles = final_candles
-            
+
             if interval == "day":
-                 result_candles = final_candles[:days]
-            
-            return result_candles
+                final_candles = final_candles[:days]
+
+            return final_candles
 
         except Exception as e:
             logger.error(f"Error fetching historical data: {e}")

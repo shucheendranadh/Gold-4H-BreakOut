@@ -156,8 +156,8 @@ class InstrumentManager:
         Sorts by expiry and compares Volume/OI for all candidates.
         """
         instruments = self.fetch_instruments()
-        
         filtered_instruments = self.filter_gold_ten_fut(instruments)
+        del instruments  # release full MCX list (~MB) from memory
 
         if not filtered_instruments:
             logger.warning("No GOLDTEN FUT instruments found.")
