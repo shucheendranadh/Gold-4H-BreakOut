@@ -172,6 +172,12 @@ def main():
                             plan=act['plan'],
                             session_name=act['session']
                         )
+                         ref = act.get('ref_level', {})
+                         sm.save_session_levels(
+                             session_name=act['session'],
+                             plan=act['plan'],
+                             high_low_data={'high': ref.get('high'), 'low': ref.get('low')}
+                         )
                     
                     elif act.get('action') == "GAP_WAIT":
                         session = act.get('session')
