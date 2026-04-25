@@ -215,10 +215,12 @@ class SignalEngine:
                     
                     # Detect Gap
                     is_gap = False
-                    if day_open > std_levels['BUY']['entry']:
-                         is_gap = "UP"
+                    if day_open is None:
+                        logger.warning("day_open unavailable (API returned None) — skipping gap detection, using standard levels.")
+                    elif day_open > std_levels['BUY']['entry']:
+                        is_gap = "UP"
                     elif day_open < std_levels['SELL']['entry']:
-                         is_gap = "DOWN"
+                        is_gap = "DOWN"
                     
                     if is_gap:
                          gap_resolve_time = today_start_dt + timedelta(minutes=15)
