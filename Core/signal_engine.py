@@ -299,7 +299,11 @@ class SignalEngine:
                 high, low = self.md.get_session_high_low(instrument_token, prev_start, prev_end)
                 
                 if high and low:
-                    hist_candles = self.md.get_last_n_candles_4h(instrument_token)
+                    # Fetch 3 prior completed 4H candles, then inject the newly formed
+                    # session as the 4th so structural entry/SL always uses last 4 sessions
+                    # including the one that just closed.
+                    hist_candles = self.md.get_last_n_candles_4h(instrument_token, n=3)
+                    hist_candles = hist_candles + [{'high': high, 'low': low}]
                     std_levels = self.calculate_levels_with_buffers(high, low, hist_candles)
                     active_trade_side = state.get("triggered_side")
                     
@@ -427,7 +431,8 @@ class SignalEngine:
                 ref_type = f"Session {prev_start}-{prev_end} (Restorative)"
 
         if high and low:
-            hist_candles = self.md.get_last_n_candles_4h(instrument_token)
+            hist_candles = self.md.get_last_n_candles_4h(instrument_token, n=3)
+            hist_candles = hist_candles + [{'high': high, 'low': low}]
             levels = self.calculate_levels_with_buffers(high, low, hist_candles)
             plan = self._format_plan_from_levels(levels)
             logger.info(f"Generated Restorative Plan based on {ref_type}: Effective High={levels['REFERENCE']['high']}, Low={levels['REFERENCE']['low']}")

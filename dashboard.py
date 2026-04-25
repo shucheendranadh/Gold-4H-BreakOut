@@ -252,10 +252,10 @@ with tab_sessions:
                 "Low":         s.get("low"),
                 "BUY Entry":   buy.get("entry"),
                 "BUY SL":      buy.get("sl_1"),
-                "BUY Target":  buy.get("target"),
+                "BUY Target":  buy.get("target_1"),
                 "SELL Entry":  sell.get("entry"),
                 "SELL SL":     sell.get("sl_1"),
-                "SELL Target": sell.get("target"),
+                "SELL Target": sell.get("target_1"),
             })
 
         st.dataframe(pd.DataFrame(rows), use_container_width=True)
