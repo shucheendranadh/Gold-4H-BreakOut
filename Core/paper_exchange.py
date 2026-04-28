@@ -11,7 +11,8 @@ class PaperExchange:
     def __init__(self, orders_file="Data/paper_orders.json", pnl_file="Data/paper_pnl.json"):
         self.orders_file = orders_file
         self.pnl_file = pnl_file
-        self._orders_mem = None  # loaded once, kept in memory
+        self._orders_mem = None
+        self._orders_mtime = None  # mtime-based invalidation across instances
         self._ensure_files()
         
     def _ensure_files(self):
@@ -32,18 +33,25 @@ class PaperExchange:
                 }, f)
 
     def _load_orders(self):
-        if self._orders_mem is None:
-            try:
-                with open(self.orders_file, 'r') as f:
-                    self._orders_mem = json.load(f)
-            except Exception:
-                self._orders_mem = []
+        try:
+            mtime = os.path.getmtime(self.orders_file)
+            if self._orders_mem is not None and mtime == self._orders_mtime:
+                return self._orders_mem
+            with open(self.orders_file, 'r') as f:
+                self._orders_mem = json.load(f)
+            self._orders_mtime = mtime
+        except Exception:
+            self._orders_mem = []
         return self._orders_mem
 
     def _save_orders(self, orders):
         self._orders_mem = orders
         with open(self.orders_file, 'w') as f:
             json.dump(orders, f, indent=4)
+        try:
+            self._orders_mtime = os.path.getmtime(self.orders_file)
+        except Exception:
+            self._orders_mtime = None
 
     def _load_pnl(self):
         try:

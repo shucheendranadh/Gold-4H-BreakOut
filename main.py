@@ -177,27 +177,37 @@ def main():
                     logger.info(f"Event Received: {act.get('action', act.get('event'))}")
                     
                     if act.get('action') == "PLACE_GTT":
-                         gtt_manager.place_gtts(
-                            active_contract=active_contract,
-                            plan=act['plan'],
-                            session_name=act['session']
-                        )
-                         ref = act.get('ref_level', {})
-                         sm.save_session_levels(
-                             session_name=act['session'],
-                             plan=act['plan'],
-                             high_low_data={'high': ref.get('high'), 'low': ref.get('low')}
-                         )
-                    
+                         # Reload state to get the freshest triggered_side before placing
+                         fresh_state = sm.load_state()
+                         if fresh_state and fresh_state.get("triggered_side"):
+                             logger.info(f"[{act.get('session', '?')}] Active trade ({fresh_state['triggered_side']}) in progress. Skipping GTT placement until trade closes.")
+                         else:
+                             gtt_manager.place_gtts(
+                                active_contract=active_contract,
+                                plan=act['plan'],
+                                session_name=act['session']
+                            )
+                             ref = act.get('ref_level', {})
+                             sm.save_session_levels(
+                                 session_name=act['session'],
+                                 plan=act['plan'],
+                                 high_low_data={'high': ref.get('high'), 'low': ref.get('low')}
+                             )
+
                     elif act.get('action') == "GAP_WAIT":
                         session = act.get('session')
                         timeout = act.get('timeout')
                         logger.info(f"[{session}] Gap Protection Active. Waiting until {timeout} to calculate range.")
-                         
+
                     elif act.get('action') == "CANCEL_ONLY":
                         session = act.get('session')
-                        logger.info(f"[{session}] Gap detected at boundary. Cancelling existing GTTs first.")
-                        cancel_tool.cancel_stored_gtts()
+                        # Guard: never cancel GTTs while a trade is active
+                        fresh_state = sm.load_state()
+                        if fresh_state and fresh_state.get("triggered_side"):
+                            logger.info(f"[{session}] Active trade ({fresh_state['triggered_side']}) in progress. Skipping GTT cancellation.")
+                        else:
+                            logger.info(f"[{session}] Gap detected at boundary. Cancelling existing GTTs first.")
+                            cancel_tool.cancel_stored_gtts()
                         
                     elif act.get('event') == "SESSION_BOUNDARY":
                         session_name = act.get('session_name')
