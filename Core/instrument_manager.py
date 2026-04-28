@@ -190,11 +190,14 @@ class InstrumentManager:
 
         logger.info("Fetching Market Quotes for Active Contract...")
         quotes = self.get_market_quotes(instrument_keys)
-        
+
         if not quotes:
-            logger.warning("No market quotes returned.")
-            return None
-            
+            # Market may not have opened yet — fall back to nearest-expiry contract
+            nearest_key = candidates[0].get("instrument_key")
+            nearest_sym = candidates[0].get("trading_symbol")
+            logger.warning(f"Market quotes unavailable. Falling back to nearest-expiry contract: {nearest_sym} ({nearest_key})")
+            return nearest_key
+
         logger.debug(f"Quotes Keys: {list(quotes.keys())}")
 
         # Calculate Rank
@@ -203,6 +206,9 @@ class InstrumentManager:
         if best_contract:
             logger.info(f"ACTIVE CONTRACT IDENTIFIED: {best_contract}")
             return best_contract
-        else:
-            logger.warning("Could not determine active contract from quotes.")
-            return None
+
+        # Rank returned None (all zero volume/OI) — fall back to nearest expiry
+        nearest_key = candidates[0].get("instrument_key")
+        nearest_sym = candidates[0].get("trading_symbol")
+        logger.warning(f"Rank inconclusive (zero volume/OI). Falling back to nearest-expiry: {nearest_sym} ({nearest_key})")
+        return nearest_key

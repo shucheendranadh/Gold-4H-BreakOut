@@ -65,12 +65,22 @@ def main():
     guardian = Guardian() # Initialize Guardian
     paper = PaperExchange() # Initialize Paper Exchange
     
-    # Fetch Active Contract once
+    # Fetch Active Contract — retry up to 3 times (quotes may be empty at market open)
     im = InstrumentManager()
-    active_contract = im.get_active_contract()
-    
+    active_contract = None
+    for attempt in range(1, 4):
+        try:
+            active_contract = im.get_active_contract()
+        except Exception as e:
+            logger.error(f"Exception in get_active_contract (attempt {attempt}/3): {e}")
+        if active_contract:
+            break
+        if attempt < 3:
+            logger.warning(f"Active contract not found (attempt {attempt}/3). Retrying in 60s...")
+            time.sleep(60)
+
     if not active_contract:
-        logger.error("Failed to determine active contract. Exiting.")
+        logger.error("Failed to determine active contract after 3 attempts. Exiting.")
         return
 
     logger.info(f"Active Contract: {active_contract}")
