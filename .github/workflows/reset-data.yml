@@ -1,0 +1,80 @@
+name: Reset Bot Data (Fresh Start)
+
+on:
+  workflow_dispatch:
+    inputs:
+      restart_bot:
+        description: "Restart the bot after reset?"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      initial_capital:
+        description: "Paper trading initial capital"
+        required: true
+        default: "100000"
+
+jobs:
+  reset:
+    name: Reset Logs, Orders & P&L on AWS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH Reset
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.AWS_HOST }}
+          username: ${{ vars.AWS_USERNAME }}
+          key: ${{ secrets.AWS_SSH_KEY }}
+          command_timeout: 5m
+          script: |
+            set -e
+
+            PROJECT_DIR="${{ vars.PROJECT_LOCATION }}"
+            RESTART="${{ github.event.inputs.restart_bot }}"
+            CAPITAL="${{ github.event.inputs.initial_capital }}"
+
+            echo "==> Stopping bot service..."
+            sudo systemctl stop gold-4h-breakout.service || true
+            sleep 2
+
+            echo "==> Clearing log files..."
+            truncate -s 0 "$PROJECT_DIR/Logs/GOLD_MARKET.log"      2>/dev/null || true
+            truncate -s 0 "$PROJECT_DIR/Logs/SESSION_REPORTS.log"  2>/dev/null || true
+            truncate -s 0 "$PROJECT_DIR/Logs/console_output.log"   2>/dev/null || true
+            truncate -s 0 "$PROJECT_DIR/Logs/startup_log.txt"      2>/dev/null || true
+
+            echo "==> Resetting trading state..."
+            echo '{}' > "$PROJECT_DIR/Data/trading_state.json"
+
+            echo "==> Resetting session levels..."
+            echo '[]' > "$PROJECT_DIR/Data/session_levels.json"
+
+            echo "==> Resetting paper orders..."
+            echo '[]' > "$PROJECT_DIR/Data/paper_orders.json"
+
+            echo "==> Resetting paper P&L (capital: $CAPITAL)..."
+            cat > "$PROJECT_DIR/Data/paper_pnl.json" <<EOF
+            {
+                "initial_capital": $CAPITAL,
+                "current_balance": $CAPITAL,
+                "realized_pnl": 0.0,
+                "trades": []
+            }
+            EOF
+
+            echo "==> Reset complete. Files cleared:"
+            ls -lh "$PROJECT_DIR/Logs/" "$PROJECT_DIR/Data/"
+
+            if [ "$RESTART" = "true" ]; then
+              echo ""
+              echo "==> Restarting bot service..."
+              sudo systemctl start gold-4h-breakout.service
+              sleep 3
+              sudo systemctl status gold-4h-breakout.service --no-pager --lines=10 || true
+              echo "==> Bot restarted."
+            else
+              echo "==> Bot NOT restarted (restart_bot=false). Start manually when ready."
+            fi
