@@ -248,6 +248,9 @@ class PositionManager:
                         logger.info(f"Lot 1 ({lot1_id}) hit Target. Proceeding with Lot 2 trailing SL.")
                     else:
                         logger.info(f"Lot 1 ({lot1_id}) target not hit yet. Lot 2 maintains initial SL.")
+                        # Latch the session slot so we don't re-log every 5 seconds
+                        state["tsl_session_slot"] = tsl_session_slot
+                        self.sm.save_state(state)
                         return True
                 else:
                     # Lot 1 details missing (likely completed/expired)
