@@ -39,6 +39,7 @@ COMEX_DATA_URL_LONG = "https://query1.finance.yahoo.com/v8/finance/chart/GC=F?in
 COMEX_MONITOR_INTERVAL = 30  # seconds
 
 # Guardian Settings (Crash Protection)
+GUARDIAN_ENABLED = False           # Set to False to temporarily disable Guardian checks
 GUARDIAN_CHECK_INTERVAL = 60      # Seconds (1 minute)
 GUARDIAN_CRASH_DROP_PCT = 0.008   # 0.8% drop/spike threshold
 GUARDIAN_LOOKBACK_MINUTES = 5     # Time window for crash detection

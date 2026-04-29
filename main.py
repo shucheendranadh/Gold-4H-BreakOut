@@ -5,7 +5,7 @@ import logging
 import time
 import atexit
 from datetime import datetime
-from config import LOG_FILE_PATH_MARKET, MARKET_START_TIME, SESSION_END_TIME, GUARDIAN_CHECK_INTERVAL, ENABLE_PAPER_TRADING, INITIAL_PAPER_CAPITAL
+from config import LOG_FILE_PATH_MARKET, MARKET_START_TIME, SESSION_END_TIME, GUARDIAN_CHECK_INTERVAL, GUARDIAN_ENABLED, ENABLE_PAPER_TRADING
 from Core.signal_engine import SignalEngine
 from Core.gtt_manager import GTTManager
 from Core.instrument_manager import InstrumentManager
@@ -103,7 +103,7 @@ def main():
         
         # Only run if we are within market hours but "late" (e.g., after 09:00 and before 23:30)
         # signal_engine.generate_restorative_plan handles the time logic (returns None if too early/invalid)
-        if current_hhmm > MARKET_START_TIME and current_hhmm < SESSION_END_TIME:
+        if current_hhmm > MARKET_START_TIME[:5] and current_hhmm < SESSION_END_TIME:
             logger.info("Fresh Start detected Mid-Day. Checking for restorative GTT opportunity...")
             
             # Use the "Restorative Plan" logic (same as Guardian)
@@ -144,11 +144,10 @@ def main():
                 break
                 
             current_ts = time.time()
- \
- 
+
             # --- JOB 1: GUARDIAN CHECK (Every Configured Interval) ---
-            # Only run Guardian if Market is OPEN (after start time)
-            if current_hhmm >= MARKET_START_TIME and (current_ts - last_guardian_time > GUARDIAN_CHECK_INTERVAL):
+            # Only run Guardian if Market is OPEN (after start time) and Guardian is enabled
+            if GUARDIAN_ENABLED and current_hhmm >= MARKET_START_TIME[:5] and (current_ts - last_guardian_time > GUARDIAN_CHECK_INTERVAL):
                 logger.info("Running Scheduled Guardian Check...")
                 try:
                      # Guardian Internal Logic: Check Crash -> Panic -> Restore

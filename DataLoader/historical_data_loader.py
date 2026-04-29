@@ -8,6 +8,8 @@ logger = logging.getLogger("GOLD_MAIN")
 class HistoricalDataFetcher:
     def __init__(self):
         self.base_url = UPSTOX_HISTORICAL_CANDLE_URL
+        self._ltp_err_logged_at = None   # rate-limit repeated LTP error logs
+        self._ltp_err_status = None
 
     def fetch_previous_trading_days(self, instrument_key, days=4, interval="day", include_today=False):
         """
@@ -368,19 +370,38 @@ class HistoricalDataFetcher:
             'Authorization': f'Bearer {UPSTOX_ACCESS_TOKEN}'
         }
         params = {'instrument_key': instrument_key}
-        
+
         try:
             response = requests.get(UPSTOX_MARKET_QUOTE_URL, headers=headers, params=params)
+
+            if response.status_code == 401:
+                now = datetime.now()
+                if self._ltp_err_status != 401 or self._ltp_err_logged_at is None or \
+                        (now - self._ltp_err_logged_at).total_seconds() > 300:
+                    logger.error("Upstox token expired (401 Unauthorized). Please refresh the access token in the token file.")
+                    self._ltp_err_logged_at = now
+                    self._ltp_err_status = 401
+                return None
+
+            # Reset error tracking on successful response
+            self._ltp_err_status = None
+            self._ltp_err_logged_at = None
+
             response.raise_for_status()
             data = response.json()
-            
+
             if data.get("status") == "success":
                 quote_data = self._get_quote_data(data, instrument_key)
                 ltp = quote_data.get("last_price")
                 return ltp
             return None
         except Exception as e:
-            logger.error(f"Error fetching LTP: {e}")
+            now = datetime.now()
+            if self._ltp_err_logged_at is None or \
+                    (now - self._ltp_err_logged_at).total_seconds() > 300:
+                logger.error(f"Error fetching LTP: {e}")
+                self._ltp_err_logged_at = now
+                self._ltp_err_status = "other"
             return None
 
     def fetch_day_open(self, instrument_key):
