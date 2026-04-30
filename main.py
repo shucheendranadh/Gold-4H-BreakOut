@@ -47,7 +47,14 @@ def main():
         try:
             with open(LOCK_FILE, 'r') as f:
                 old_pid = int(f.read().strip())
-                logger.warning(f"Found existing lock file (PID {old_pid}). Overwriting assuming restart.")
+            # Check if that process is still alive
+            import signal as _signal
+            try:
+                os.kill(old_pid, 0)  # signal 0 = existence check only
+                logger.error(f"Another instance is already running (PID {old_pid}). Exiting to prevent duplicate trades.")
+                return
+            except (OSError, ProcessLookupError):
+                logger.warning(f"Stale lock file found (PID {old_pid} no longer running). Continuing.")
         except Exception:
             pass
 
