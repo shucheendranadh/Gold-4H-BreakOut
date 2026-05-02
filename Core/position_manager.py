@@ -125,52 +125,23 @@ class PositionManager:
         # --- 2. Trailing SL Logic (If triggered) ---
         if triggered_side:
             # --- 1. Robust Opposite Side Cancellation ---
-            # Only cancel if NOT already cancelled AND we have a confirmed Open Position
             if not state.get("opposite_cancelled", False):
-                instrument = state.get("instrument")
-                if not instrument:
-                    # Try to recover instrument from GTTs if missing? 
-                    # For now just log warning, or rely on active_contract passed to other methods?
-                    # The state should have instrument token. If not, we might skip position check?
-                    # Let's assume passed in statemanager or available via config/active_contract.
-                    # Actually, handle_daily_maintenance doesn't take active_contract.
-                    # But we can try to fetch it or skip check?
-                    # Safer: Check position if instrument is known.
-                    pass
-                
-                # Check for Open Position (Real or Paper)
-                # We need instrument_token. State usually stores it?
-                # If not, we can't reliably check position.
-                # Let's try to get it from gtts triggered?
-                # Fallback: If no instrument in state, maybe we skip position check?
-                # But user wants SAFETY.
-                
-                has_position = False
-                if instrument:
-                     has_position = self.om.has_open_position(instrument)
+                from config import ENABLE_PAPER_TRADING
+                if ENABLE_PAPER_TRADING:
+                    # In paper mode, triggered_side in state is sufficient — no API call needed
+                    self._cancel_opposite_side_gtts(triggered_side, gtts)
+                    state["opposite_cancelled"] = True
+                    self.sm.save_state(state)
                 else:
-                     # If instrument missing, we might be in trouble. 
-                     # But let's assume if triggered_side is set, we proceed CAUTIOUSLY.
-                     # Without instrument, has_open_position might fail or we need to pass something.
-                     # Let's assume we can get it from OrderManager if we knew it?
-                     # Wait, OrderManager needs token.
-                     # Let's check if 'active_contract' is available in state?
-                     # StateManager saves 'instrument' usually?
-                     # Let's check save_state calls.
-                     pass
-
-                # If we have a position, OR we assume we do (risky? no, user wants check).
-                # Implementation Plan said: "Verify self.om.has_open_position(instrument)"
-                # I need to ensure state has 'instrument'.
-                
-                if instrument and self.om.has_open_position(instrument):
-                     self._cancel_opposite_side_gtts(triggered_side, gtts)
-                     state["opposite_cancelled"] = True
-                     self.sm.save_state(state)
-                elif not instrument:
-                     logger.warning("Instrument token missing in state. Cannot verify position for opposite cancellation.")
-                else:
-                     logger.info(f"Trigger detected ({triggered_side}) but Open Position not yet confirmed. Waiting before cancelling opposite side.")
+                    instrument = state.get("instrument")
+                    if instrument and self.om.has_open_position(instrument):
+                        self._cancel_opposite_side_gtts(triggered_side, gtts)
+                        state["opposite_cancelled"] = True
+                        self.sm.save_state(state)
+                    elif not instrument:
+                        logger.warning("Instrument token missing in state. Cannot verify position for opposite cancellation.")
+                    else:
+                        logger.info(f"Trigger detected ({triggered_side}) but Open Position not yet confirmed. Waiting before cancelling opposite side.")
 
             entry_price = state.get("entry_price")
             lot1_id = gtts.get(triggered_side, {}).get("OCO")

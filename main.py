@@ -188,6 +188,7 @@ def main():
                          if fresh_state and fresh_state.get("triggered_side"):
                              logger.info(f"[{act.get('session', '?')}] Active trade ({fresh_state['triggered_side']}) in progress. Skipping GTT placement until trade closes.")
                          else:
+                             cancel_tool.cancel_stored_gtts()
                              gtt_manager.place_gtts(
                                 active_contract=active_contract,
                                 plan=act['plan'],
