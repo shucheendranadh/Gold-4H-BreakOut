@@ -254,6 +254,10 @@ class PositionManager:
             candles = self.fetcher.fetch_previous_trading_days(instrument)
             if not candles or len(candles) < 4:
                 logger.error(f"Not enough historical data for 4d levels (instrument: {instrument}, got {len(candles) if candles else 0} candles).")
+                # Latch the slot so we don't retry every 5s when data is unavailable
+                state["tsl_session_slot"] = tsl_session_slot
+                state["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                self.sm.save_state(state)
                 return True
                 
             last_4 = candles[:4]
