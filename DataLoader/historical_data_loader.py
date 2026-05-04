@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 import logging
 import requests
-from config import UPSTOX_ACCESS_TOKEN, UPSTOX_HISTORICAL_CANDLE_URL, UPSTOX_MARKET_QUOTE_URL
+from config import get_access_token, UPSTOX_ACCESS_TOKEN, UPSTOX_HISTORICAL_CANDLE_URL, UPSTOX_MARKET_QUOTE_URL
 
 logger = logging.getLogger("GOLD_MAIN")
 
@@ -17,7 +17,7 @@ class HistoricalDataFetcher:
         Returns the last `days` trading candles strictly BEFORE today (unless include_today=True).
         """
         #instrument_key = "MCX_FO|472782"
-        if not UPSTOX_ACCESS_TOKEN:
+        if not get_access_token():
             logger.error("UPSTOX_ACCESS_TOKEN not set.")
             return []
 
@@ -60,7 +60,7 @@ class HistoricalDataFetcher:
         
         headers = {
             'Accept': 'application/json',
-            'Authorization': f'Bearer {UPSTOX_ACCESS_TOKEN}'
+            'Authorization': f'Bearer {get_access_token()}'
         }
 
         try:
@@ -138,7 +138,7 @@ class HistoricalDataFetcher:
             to_date (str): "YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS"
             interval (str): "1minute", "30minute", "day", etc.
         """
-        if not UPSTOX_ACCESS_TOKEN:
+        if not get_access_token():
              return []
 
         # Format dates for API (YYYY-MM-DD or YYYY-MM-DD HH:MM:SS is accepted? Docs say YYYY-MM-DD for From/To usually)
@@ -178,7 +178,7 @@ class HistoricalDataFetcher:
              # Default fallback
              url = f"{self.base_url}/{safe_key}/{interval}/{to_date_str}/{from_date_str}"
         
-        headers = { 'Accept': 'application/json', 'Authorization': f'Bearer {UPSTOX_ACCESS_TOKEN}' }
+        headers = { 'Accept': 'application/json', 'Authorization': f'Bearer {get_access_token()}' }
         
         all_raw_candles = []
         
@@ -265,7 +265,7 @@ class HistoricalDataFetcher:
         Fetches intraday (1minute) candles for the current trading day.
         Used to get 'today's' data for Gap detection.
         """
-        if not UPSTOX_ACCESS_TOKEN:
+        if not get_access_token():
             logger.error("UPSTOX_ACCESS_TOKEN not set.")
             return []
 
@@ -288,7 +288,7 @@ class HistoricalDataFetcher:
         
         headers = {
             'Accept': 'application/json',
-            'Authorization': f'Bearer {UPSTOX_ACCESS_TOKEN}'
+            'Authorization': f'Bearer {get_access_token()}'
         }
 
         try:
@@ -362,12 +362,12 @@ class HistoricalDataFetcher:
         """
         Fetches the current Last Traded Price (LTP) using the Market Quote API.
         """
-        if not UPSTOX_ACCESS_TOKEN:
+        if not get_access_token():
             return None
 
         headers = {
             'Accept': 'application/json',
-            'Authorization': f'Bearer {UPSTOX_ACCESS_TOKEN}'
+            'Authorization': f'Bearer {get_access_token()}'
         }
         params = {'instrument_key': instrument_key}
 
@@ -409,13 +409,13 @@ class HistoricalDataFetcher:
         Fetches the day's opening price using the Market Quote API.
         This is more reliable than candles immediately after market open.
         """
-        if not UPSTOX_ACCESS_TOKEN:
+        if not get_access_token():
             logger.error("UPSTOX_ACCESS_TOKEN not set.")
             return None
 
         headers = {
             'Accept': 'application/json',
-            'Authorization': f'Bearer {UPSTOX_ACCESS_TOKEN}'
+            'Authorization': f'Bearer {get_access_token()}'
         }
         params = {'instrument_key': instrument_key}
         

@@ -14,18 +14,40 @@ from dotenv import load_dotenv
 # Load token from hardcoded secure path: ~/tradingbridge/.token.env
 # File format: UPSTOX_ACCESS_TOKEN=eyJ0eXAiOi...
 _token_file = os.path.expanduser("~/tradingbridge/.token.env")
-UPSTOX_ACCESS_TOKEN = None
+_token_cache = {"token": None, "mtime": None}
 
-if os.path.isfile(_token_file):
-    with open(_token_file, "r") as _f:
-        for _line in _f:
-            _line = _line.strip()
-            if _line.startswith("UPSTOX_ACCESS_TOKEN="):
-                UPSTOX_ACCESS_TOKEN = _line.split("=", 1)[1].strip()
-                break
+def _read_token_from_file():
+    if os.path.isfile(_token_file):
+        with open(_token_file, "r") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line.startswith("UPSTOX_ACCESS_TOKEN="):
+                    return _line.split("=", 1)[1].strip()
+    return None
 
+def get_access_token():
+    """Return the current access token, reloading from file if it has changed."""
+    try:
+        mtime = os.path.getmtime(_token_file)
+        if _token_cache["token"] is not None and mtime == _token_cache["mtime"]:
+            return _token_cache["token"]
+        token = _read_token_from_file()
+        if token:
+            _token_cache["token"] = token
+            _token_cache["mtime"] = mtime
+    except Exception:
+        pass
+    return _token_cache["token"]
+
+# Validate token exists at startup
+UPSTOX_ACCESS_TOKEN = _read_token_from_file()
 if not UPSTOX_ACCESS_TOKEN:
     raise ValueError("UPSTOX_ACCESS_TOKEN not found in ~/tradingbridge/.token.env")
+_token_cache["token"] = UPSTOX_ACCESS_TOKEN
+try:
+    _token_cache["mtime"] = os.path.getmtime(_token_file)
+except Exception:
+    pass
 
 # Confidence Scoring & Arming
 MIN_CONFIDENCE_THRESHOLD = 50
