@@ -2,6 +2,7 @@ import streamlit as st
 import json
 import os
 import time
+import subprocess
 import pandas as pd
 from datetime import datetime
 
@@ -73,10 +74,65 @@ def pnl_color(val):
 def fmt_inr(val):
     return f"₹{val:,.2f}"
 
+def get_service_status():
+    try:
+        r = subprocess.run(
+            ["systemctl", "is-active", "gold-4h-breakout.service"],
+            capture_output=True, text=True, timeout=3
+        )
+        return r.stdout.strip()
+    except Exception:
+        return "unknown"
+
+def restart_service():
+    try:
+        r = subprocess.run(
+            ["sudo", "systemctl", "restart", "gold-4h-breakout.service"],
+            capture_output=True, text=True, timeout=15
+        )
+        return r.returncode == 0, r.stderr.strip() or "Restarted successfully."
+    except Exception as e:
+        return False, str(e)
+
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("🏆 Gold 4H Bot")
     st.caption("Live Dashboard")
+    st.divider()
+
+    # Service status
+    svc_status = get_service_status()
+    if svc_status == "active":
+        st.markdown('<span class="status-pill-active">● Service Running</span>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'<span class="status-pill-pending">● Service {svc_status}</span>', unsafe_allow_html=True)
+
+    st.divider()
+
+    # Restart button with confirmation
+    if "confirm_restart" not in st.session_state:
+        st.session_state.confirm_restart = False
+
+    if not st.session_state.confirm_restart:
+        if st.button("🔁 Restart Bot Service", use_container_width=True):
+            st.session_state.confirm_restart = True
+            st.rerun()
+    else:
+        st.warning("Restart the bot service?")
+        col_y, col_n = st.columns(2)
+        if col_y.button("✅ Yes", use_container_width=True):
+            with st.spinner("Restarting..."):
+                ok, msg = restart_service()
+                time.sleep(2)
+            st.session_state.confirm_restart = False
+            if ok:
+                st.success("Service restarted.")
+            else:
+                st.error(f"Failed: {msg}")
+        if col_n.button("❌ No", use_container_width=True):
+            st.session_state.confirm_restart = False
+            st.rerun()
+
     st.divider()
     refresh = st.slider("Auto-refresh (sec)", 5, 120, 15)
     log_lines = st.slider("Log lines to show", 50, 500, 200, step=50)
