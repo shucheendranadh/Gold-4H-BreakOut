@@ -22,15 +22,15 @@ class HistoricalDataFetcher:
             return []
 
         today = datetime.now()
-        # Fetch enough data to cover weekends/holidays. 15 days should be safe for 4 trading days.
-        # Calculate date range
-        # We want to go back enough to find X trading days. 
-        # Simple heuristic: 1 trading day ~= 1.5 calendar days (weekends).
-        # Safety margin: days * 2 (Reduced from 5 to avoid 400 Bad Request on 30min data)
-        lookback_days = max(days * 2 + 2, 7) # Min 7 days, max dependent on request
+        lookback_days = max(days * 2 + 2, 7)
         from_date = today - timedelta(days=lookback_days)
-        
-        to_date_str = today.strftime("%Y-%m-%d")
+
+        # Upstox v3 daily candles API returns 400 when to_date is today (incomplete candle).
+        # Always use yesterday as to_date for "day" interval unless include_today is explicitly set.
+        if interval == "day" and not include_today:
+            to_date_str = (today - timedelta(days=1)).strftime("%Y-%m-%d")
+        else:
+            to_date_str = today.strftime("%Y-%m-%d")
         from_date_str = from_date.strftime("%Y-%m-%d")
         
         # URL construction: {instrumentKey}/{interval}/{to_date}/{from_date}
