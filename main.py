@@ -4,6 +4,7 @@ import sys
 import logging
 import time
 import atexit
+import fcntl
 from datetime import datetime
 from config import LOG_FILE_PATH_MARKET, MARKET_START_TIME, SESSION_END_TIME, GUARDIAN_CHECK_INTERVAL, GUARDIAN_ENABLED, ENABLE_PAPER_TRADING
 from Core.signal_engine import SignalEngine
@@ -34,34 +35,46 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 LOCK_FILE = "gold_market.lock"
+_lock_fd = None
 
-def cleanup_lock():
-    if os.path.exists(LOCK_FILE):
+def acquire_lock():
+    """Acquire an exclusive OS-level file lock. Returns True if acquired, False if another instance holds it."""
+    global _lock_fd
+    try:
+        _lock_fd = open(LOCK_FILE, 'w')
+        fcntl.flock(_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _lock_fd.write(str(os.getpid()))
+        _lock_fd.flush()
+        return True
+    except (IOError, OSError):
+        if _lock_fd:
+            _lock_fd.close()
+            _lock_fd = None
+        return False
+
+def release_lock():
+    global _lock_fd
+    if _lock_fd:
+        try:
+            fcntl.flock(_lock_fd, fcntl.LOCK_UN)
+            _lock_fd.close()
+        except Exception:
+            pass
+        _lock_fd = None
+    try:
         os.remove(LOCK_FILE)
+    except Exception:
+        pass
 
 def main():
     logger.info("=== STARTING GOLD 4H BREAKOUT SYSTEM ===")
-    
-    # --- Lock Handling ---
-    if os.path.exists(LOCK_FILE):
-        try:
-            with open(LOCK_FILE, 'r') as f:
-                old_pid = int(f.read().strip())
-            # Check if that process is still alive
-            import signal as _signal
-            try:
-                os.kill(old_pid, 0)  # signal 0 = existence check only
-                logger.error(f"Another instance is already running (PID {old_pid}). Exiting to prevent duplicate trades.")
-                return
-            except (OSError, ProcessLookupError):
-                logger.warning(f"Stale lock file found (PID {old_pid} no longer running). Continuing.")
-        except Exception:
-            pass
 
-    with open(LOCK_FILE, 'w') as f:
-        f.write(str(os.getpid()))
-    
-    atexit.register(cleanup_lock)
+    # --- Lock Handling (atomic flock — race-condition-free) ---
+    if not acquire_lock():
+        logger.error("Another instance is already running. Exiting to prevent duplicate trades.")
+        return
+
+    atexit.register(release_lock)
     
     # --- Initialization ---
     signal_engine = SignalEngine()
