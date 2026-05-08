@@ -15,7 +15,8 @@ class SignalEngine:
     def __init__(self):
         self.md = MarketData()
         self.sessions = SESSIONS # ["09:00", "13:00", "17:00", "21:00"]
-        self._session1_retry_after = None  # cooldown after PDH/PDL fetch failure
+        self._session1_retry_after = None       # cooldown after PDH/PDL fetch failure
+        self._session_retry_after = {}          # cooldown per session index for sessions 2-4
 
     def mround(self, number, base=0.05):
         return round(round(number / base) * base, 2)
@@ -295,17 +296,22 @@ class SignalEngine:
                      if last_updated_dt < target_dt:
                          should_trigger = True
             
+            # Cooldown: skip if a previous attempt for this session already failed recently
+            if should_trigger and self._session_retry_after.get(i) and now < self._session_retry_after[i]:
+                should_trigger = False
+
             if should_trigger:
                 logger.info(f"Triggering Session Transition for {session_start} (Last Updated: {last_updated_str})")
-                
+
                 # Previous session
                 prev_start = self.sessions[i-1]
                 prev_end = session_start
-                
+
                 # Fetch Data for the closed session
                 high, low = self.md.get_session_high_low(instrument_token, prev_start, prev_end)
-                
+
                 if high and low:
+                    self._session_retry_after.pop(i, None)
                     # Fetch 3 prior completed 4H candles, then inject the newly formed
                     # session as the 4th so structural entry/SL always uses last 4 sessions
                     # including the one that just closed.
@@ -372,7 +378,8 @@ class SignalEngine:
                         "plan": plan
                     })
                 else:
-                    logger.error(f"Failed to fetch High/Low for range {prev_start}-{prev_end}")
+                    self._session_retry_after[i] = now + timedelta(seconds=60)
+                    logger.error(f"Failed to fetch High/Low for range {prev_start}-{prev_end}. Will retry in 60s.")
         
         return actions
 
