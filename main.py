@@ -24,15 +24,17 @@ if log_dir and not os.path.exists(log_dir):
 # Configure logging
 logger = logging.getLogger("GOLD_MARKET")
 logger.setLevel(logging.INFO)
+logger.propagate = False
 
-file_handler = logging.FileHandler(LOG_FILE_PATH_MARKET)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
+if not logger.handlers:
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    file_handler = logging.FileHandler(LOG_FILE_PATH_MARKET)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
 
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(formatter)
-logger.addHandler(console_handler)
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
 
 LOCK_FILE = "gold_market.lock"
 _lock_fd = None
@@ -67,14 +69,14 @@ def release_lock():
         pass
 
 def main():
-    logger.info("=== STARTING GOLD 4H BREAKOUT SYSTEM ===")
-
     # --- Lock Handling (atomic flock — race-condition-free) ---
+    # Acquire lock BEFORE any logging so a losing duplicate process stays silent.
     if not acquire_lock():
-        logger.error("Another instance is already running. Exiting to prevent duplicate trades.")
+        print("Another instance is already running. Exiting to prevent duplicate trades.", flush=True)
         return
 
     atexit.register(release_lock)
+    logger.info("=== STARTING GOLD 4H BREAKOUT SYSTEM ===")
     
     # --- Initialization ---
     signal_engine = SignalEngine()

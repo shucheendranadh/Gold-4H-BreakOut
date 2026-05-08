@@ -13,17 +13,23 @@ class InstrumentManager:
 
     def fetch_instruments(self):
         """
-        Loads instruments from local file if exists, otherwise downloads them.
+        Loads instruments from local file if recent (< 12h), otherwise re-downloads.
+        MCX contracts roll monthly — a stale file causes wrong instrument keys.
         """
+        import time
         if os.path.exists(DATA_FILENAME):
             try:
-                with open(DATA_FILENAME, 'r') as f:
-                    data = json.load(f)
-                    logger.info(f"Loaded {len(data)} instruments from {DATA_FILENAME}")
+                age_seconds = time.time() - os.path.getmtime(DATA_FILENAME)
+                if age_seconds < 43200:  # 12 hours
+                    with open(DATA_FILENAME, 'r') as f:
+                        data = json.load(f)
+                    logger.info(f"Loaded {len(data)} instruments from {DATA_FILENAME} (age: {age_seconds/3600:.1f}h)")
                     return data
+                else:
+                    logger.info(f"MCX.json is stale ({age_seconds/3600:.1f}h). Re-downloading fresh instrument list...")
             except Exception as e:
                 logger.error(f"Error loading {DATA_FILENAME}: {e}. Downloading fresh.")
-        
+
         return download_and_process_instruments()
 
     def filter_gold_ten_fut(self, instruments):

@@ -15,6 +15,7 @@ class SignalEngine:
     def __init__(self):
         self.md = MarketData()
         self.sessions = SESSIONS # ["09:00", "13:00", "17:00", "21:00"]
+        self._session1_retry_after = None  # cooldown after PDH/PDL fetch failure
 
     def mround(self, number, base=0.05):
         return round(round(number / base) * base, 2)
@@ -175,7 +176,11 @@ class SignalEngine:
         is_session_1_window = (now >= today_start_dt and current_time_str < "13:00:00")
         
         should_run_start = is_session_1_window and not has_run_today
-        
+
+        # Cooldown: after a PDH/PDL fetch failure, don't retry every 5s — wait 60s
+        if should_run_start and self._session1_retry_after and now < self._session1_retry_after:
+            should_run_start = False
+
         if should_run_start:
             logger.info(f"Triggering Session 1 Preparation (Current: {current_time_str})")
             
@@ -189,6 +194,7 @@ class SignalEngine:
             high, low = self.md.get_yesterday_high_low(instrument_token)
             
             if high and low:
+                self._session1_retry_after = None
                 # CHECK FOR ACTIVE TRADE (Fix for Overnight/Rollover Bug)
                 active_trade_side = state.get("triggered_side") if state else None
                 
@@ -259,7 +265,8 @@ class SignalEngine:
                              "session": "Session 1"
                          })
             else:
-                logger.error("Failed to fetch PDH/PDL for Session 1.")
+                self._session1_retry_after = now + timedelta(seconds=60)
+                logger.error("Failed to fetch PDH/PDL for Session 1. Will retry in 60s.")
 
         # 2. Intraday Session Borders
         # Sessions: 13:00, 17:00, 21:00

@@ -23,7 +23,6 @@ class HistoricalDataFetcher:
 
         today = datetime.now()
         lookback_days = max(days * 2 + 2, 7)
-        from_date = today - timedelta(days=lookback_days)
 
         # Upstox v3 daily candles API returns 400 when to_date is today (incomplete candle).
         # Always use yesterday as to_date for "day" interval unless include_today is explicitly set.
@@ -31,33 +30,25 @@ class HistoricalDataFetcher:
             to_date_str = (today - timedelta(days=1)).strftime("%Y-%m-%d")
         else:
             to_date_str = today.strftime("%Y-%m-%d")
-        from_date_str = from_date.strftime("%Y-%m-%d")
-        
-        # URL construction: {instrumentKey}/{interval}/{to_date}/{from_date}
-        # interval = 'days' (from requirements: D1=Previous Day...)
-        # Upstox V3 API expects format: {instrument_key}/{interval_unit}/{interval_value}/{to_date}/{from_date}
-        # Example from docs: .../days/1/2025-03-01/2025-01-01
-        
-        # URL encode instrument_key to handle special characters like '|'
+
         from urllib.parse import quote
         safe_key = quote(instrument_key)
-        
-        if interval == "day":
-             url = f"{self.base_url}/{safe_key}/days/1/{to_date_str}/{from_date_str}"
-        elif interval == "week":
-             url = f"{self.base_url}/{safe_key}/weeks/1/{to_date_str}/{from_date_str}"
-        elif interval == "month":
-             url = f"{self.base_url}/{safe_key}/months/1/{to_date_str}/{from_date_str}"
-        elif interval == "1minute":
-             # V3 Format: /minutes/1
-             url = f"{self.base_url}/{safe_key}/minutes/1/{to_date_str}/{from_date_str}"
-        elif interval == "30minute":
-             # V3 Format: /minutes/30
-             url = f"{self.base_url}/{safe_key}/minutes/30/{to_date_str}/{from_date_str}"
-        else:
-             # Default fallback
-             url = f"{self.base_url}/{safe_key}/{interval}/{to_date_str}/{from_date_str}"
-        
+
+        def _build_url(from_dt):
+            fd = from_dt.strftime("%Y-%m-%d")
+            if interval == "day":
+                return f"{self.base_url}/{safe_key}/days/1/{to_date_str}/{fd}", fd
+            elif interval == "week":
+                return f"{self.base_url}/{safe_key}/weeks/1/{to_date_str}/{fd}", fd
+            elif interval == "month":
+                return f"{self.base_url}/{safe_key}/months/1/{to_date_str}/{fd}", fd
+            elif interval == "1minute":
+                return f"{self.base_url}/{safe_key}/minutes/1/{to_date_str}/{fd}", fd
+            elif interval == "30minute":
+                return f"{self.base_url}/{safe_key}/minutes/30/{to_date_str}/{fd}", fd
+            else:
+                return f"{self.base_url}/{safe_key}/{interval}/{to_date_str}/{fd}", fd
+
         headers = {
             'Accept': 'application/json',
             'Authorization': f'Bearer {get_access_token()}'
@@ -65,25 +56,40 @@ class HistoricalDataFetcher:
 
         try:
             cleaned_candles = []
-            
-            # 1. Fetch Historical Data (V3)
-            try:
-                logger.info(f"Fetching V3 Historical data from {from_date_str} to {to_date_str}")
-                response = requests.get(url, headers=headers)
-                response.raise_for_status()
-                data = response.json()
-                
-                if data.get("status") == "success" and data.get("data") and data.get("data", {}).get("candles"):
-                    hist_candles = data["data"]["candles"]
-                    for c in hist_candles:
-                         ts_str = c[0]
-                         cleaned_candles.append({
-                             "timestamp": ts_str,
-                             "date": datetime.strptime(ts_str.split('T')[0], "%Y-%m-%d").date(),
-                             "open": c[1], "high": c[2], "low": c[3], "close": c[4], "volume": c[5], "oi": c[6]
-                         })
-            except Exception as e:
-                logger.error(f"V3 Historical Fetch Failed: {e}")
+
+            # 1. Fetch Historical Data (V3) — try progressively shorter lookbacks if 400
+            # New/rolled contracts may not have data going back the full window.
+            lookback_sequence = sorted(set([lookback_days, 14, 10, 7, 5, 3]), reverse=True)
+            response = None
+            from_date_str = None
+            for lb in lookback_sequence:
+                url, from_date_str = _build_url(today - timedelta(days=lb))
+                try:
+                    logger.info(f"Fetching V3 Historical data from {from_date_str} to {to_date_str}")
+                    response = requests.get(url, headers=headers)
+                    if response.status_code == 400:
+                        logger.warning(f"V3 Historical Fetch 400 (lookback={lb}d). Trying shorter range...")
+                        continue
+                    response.raise_for_status()
+                    break
+                except Exception as e:
+                    logger.error(f"V3 Historical Fetch Failed: {e}")
+                    break
+
+            if response is not None and response.status_code == 200:
+                try:
+                    data = response.json()
+                    if data.get("status") == "success" and data.get("data") and data.get("data", {}).get("candles"):
+                        hist_candles = data["data"]["candles"]
+                        for c in hist_candles:
+                             ts_str = c[0]
+                             cleaned_candles.append({
+                                 "timestamp": ts_str,
+                                 "date": datetime.strptime(ts_str.split('T')[0], "%Y-%m-%d").date(),
+                                 "open": c[1], "high": c[2], "low": c[3], "close": c[4], "volume": c[5], "oi": c[6]
+                             })
+                except Exception as e:
+                    logger.error(f"V3 Historical Parse Failed: {e}")
 
             # 2. Fetch Intraday Data (V2) - ONLY if interval is minute-based
             if interval in ["1minute", "30minute"]:
