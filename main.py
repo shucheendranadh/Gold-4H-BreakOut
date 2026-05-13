@@ -188,11 +188,16 @@ def main():
                         
                 # A. Handle Maintenance (Triggers, Trailing SL)
                 current_state = sm.load_state()
+                # Snapshot last_updated BEFORE maintenance can overwrite it.
+                # handle_daily_maintenance rebinds current_state["last_updated"] in-place;
+                # a shallow dict() copy is enough to preserve the original string value so
+                # check_schedule below sees when GTTs were last placed, not when TSL last ran.
+                pre_maintenance_state = dict(current_state)
                 if current_state:
                     pm.handle_daily_maintenance(current_state, active_contract=active_contract)
 
                 # B. Handle Schedule & Events
-                actions = signal_engine.check_schedule(active_contract, state=current_state)
+                actions = signal_engine.check_schedule(active_contract, state=pre_maintenance_state)
                 
                 for act in actions:
                     logger.info(f"Event Received: {act.get('action', act.get('event'))}")
