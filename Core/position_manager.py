@@ -98,6 +98,12 @@ class PositionManager:
         triggered_side = state.get("triggered_side")
         gtts = state.get("gtts", {})
 
+        # Backfill triggered_at if it was never written (trade predates this field)
+        if triggered_side and not state.get("triggered_at"):
+            state["triggered_at"] = state.get("last_updated", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            logger.info(f"Backfilled triggered_at from last_updated (approximate): {state['triggered_at']}")
+            self.sm.save_state(state)
+
         if not triggered_side:
             logger.debug("Checking for new GTT triggers (Today)...")
             for side in ["BUY", "SELL"]:
@@ -280,6 +286,7 @@ class PositionManager:
 
             # Mark this session slot as done so we don't recalculate every 5s
             state["tsl_session_slot"] = tsl_session_slot
+            state["current_sl"] = new_sl
             state["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.sm.save_state(state)
             return True
@@ -420,6 +427,7 @@ class PositionManager:
         
         if self.om.modify_gtt_order(lot2_id, new_sl=new_sl):
              logger.info(f"Successfully updated Lot 2 TSL to {new_sl}")
+             state["current_sl"] = new_sl
              state["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
              self.sm.save_state(state)
              return True

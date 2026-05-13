@@ -270,10 +270,12 @@ with tab_state:
         k3.metric("Triggered At",    state.get("triggered_at", "—"))
         k4.metric("Instrument",      state.get("instrument", "—"))
 
-        k5, k6, k7 = st.columns(3)
+        k5, k6, k7, k8 = st.columns(4)
         k5.metric("Strategy Mode",   state.get("strategy_mode", "—"))
         k6.metric("Session",         state.get("current_session", "—"))
         k7.metric("Paper Mode",      str(state.get("paper_mode", "—")))
+        current_sl = state.get("current_sl")
+        k8.metric("Current TSL",     f"₹{current_sl:,.0f}" if isinstance(current_sl, (int, float)) else "—")
 
         # GTT Table
         gtts = state.get("gtts")
