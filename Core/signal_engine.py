@@ -202,7 +202,7 @@ class SignalEngine:
                 if active_trade_side:
                     logger.info(f"Start of Day: Active Trade ({active_trade_side}) detected. Treating as SESSION_BOUNDARY update.")
                     hist_candles = self.md.get_last_n_candles_4h(instrument_token)
-                    levels = self.calculate_levels_with_buffers(high, low, hist_candles)
+                    levels = self.calculate_levels_with_buffers(high, low, hist_candles, use_structural_entry=False)
                     plan = self._format_plan_from_levels(levels)
 
                     actions.append({
@@ -217,8 +217,10 @@ class SignalEngine:
                     })
                 else:
                     # FRESH START: Gap Logic
+                    # Session 1 uses PDH/PDL directly — structural override would inflate entry
+                    # with spike candles from prior days.
                     hist_candles = self.md.get_last_n_candles_4h(instrument_token)
-                    std_levels = self.calculate_levels_with_buffers(high, low, hist_candles)
+                    std_levels = self.calculate_levels_with_buffers(high, low, hist_candles, use_structural_entry=False)
                     
                     # Detect Gap
                     is_gap = False
@@ -257,7 +259,7 @@ class SignalEngine:
                                    # Simple fallback (this loop can retry)
                     else:
                          # No Gap -> Standard Placement
-                         levels = self.calculate_levels_with_buffers(high, low, hist_candles)
+                         levels = self.calculate_levels_with_buffers(high, low, hist_candles, use_structural_entry=False)
                          plan = self._format_plan_from_levels(levels)
                          actions.append({
                              "action": "PLACE_GTT",
