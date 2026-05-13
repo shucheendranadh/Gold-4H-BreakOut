@@ -54,8 +54,10 @@ class PositionManager:
                 logger.info(f"Recovered triggered side: {side}, Entry: {entry_price} from previous session.")
                 state["triggered_side"] = side
                 state["entry_price"] = entry_price
-                # Update timestamp to 'today' so it's not stale next run
-                state["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                if not state.get("triggered_at"):   # preserve original if already set
+                    state["triggered_at"] = now_str
+                state["last_updated"] = now_str
                 self.sm.save_state(state)
                 return True
             else:
@@ -109,16 +111,15 @@ class PositionManager:
                     
                     if status in ["TRIGGERED", "COMPLETED"]:
                         logger.info(f"Trigger detected on {side} side (GTT: {oco_id}, Status: {status}).")
-                        
-                        # Update state
+
                         triggered_side = side
                         state["triggered_side"] = side
-                        # In the absence of a live entry price fetch, we use the rule trigger price
                         entry_price = next((r.get("trigger_price") for r in rules if r.get("strategy") == "ENTRY"), None)
                         state["entry_price"] = entry_price
-                        state["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        
-                        # Save state before cancellation to avoid loops
+                        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        state["triggered_at"] = now_str   # permanent timestamp — never overwritten
+                        state["last_updated"] = now_str
+
                         self.sm.save_state(state)
                         break # Only one side can trigger
 

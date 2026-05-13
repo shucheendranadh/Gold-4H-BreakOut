@@ -154,14 +154,16 @@ triggered_side = state.get("triggered_side") or "NONE"
 entry_price    = state.get("entry_price", "—")
 instrument     = state.get("instrument", "—")
 last_updated   = state.get("last_updated", "—")
+triggered_at   = state.get("triggered_at", "—")
 paper_mode     = state.get("paper_mode", True)
 
-col1, col2, col3, col4, col5 = st.columns(5)
+col1, col2, col3, col4, col5, col6 = st.columns(6)
 col1.metric("Mode",         "📄 Paper" if paper_mode else "🔴 Live")
 col2.metric("Active Trade", triggered_side)
 col3.metric("Entry Price",  f"₹{entry_price}" if isinstance(entry_price, (int, float)) else entry_price)
-col4.metric("Instrument",   instrument)
-col5.metric("Last Updated", last_updated)
+col4.metric("Triggered At", triggered_at)
+col5.metric("Instrument",   instrument)
+col6.metric("Last Updated", last_updated)
 
 st.divider()
 
@@ -262,15 +264,16 @@ with tab_state:
     if state:
         # Key fields as metrics
         st.subheader("Key State")
-        k1, k2, k3 = st.columns(3)
+        k1, k2, k3, k4 = st.columns(4)
         k1.metric("Triggered Side",  state.get("triggered_side", "NONE"))
         k2.metric("Entry Price",     state.get("entry_price", "—"))
-        k3.metric("Instrument",      state.get("instrument", "—"))
+        k3.metric("Triggered At",    state.get("triggered_at", "—"))
+        k4.metric("Instrument",      state.get("instrument", "—"))
 
-        k4, k5, k6 = st.columns(3)
-        k4.metric("Strategy Mode",   state.get("strategy_mode", "—"))
-        k5.metric("Session",         state.get("current_session", "—"))
-        k6.metric("Paper Mode",      str(state.get("paper_mode", "—")))
+        k5, k6, k7 = st.columns(3)
+        k5.metric("Strategy Mode",   state.get("strategy_mode", "—"))
+        k6.metric("Session",         state.get("current_session", "—"))
+        k7.metric("Paper Mode",      str(state.get("paper_mode", "—")))
 
         # GTT Table
         gtts = state.get("gtts")
