@@ -205,6 +205,15 @@ class PositionManager:
 
             if state.get("tsl_session_slot") == tsl_session_slot:
                 logger.debug(f"TSL already updated for session slot {tsl_session_slot}. Skipping.")
+                # Backfill current_sl if missing (field added after TSL was last computed)
+                if not state.get("current_sl"):
+                    details = self.om.get_gtt_order_details(lot2_id)
+                    if details:
+                        sl_rule = next((r for r in details.get("rules", []) if r.get("strategy") == "STOPLOSS"), None)
+                        if sl_rule:
+                            state["current_sl"] = float(sl_rule["trigger_price"])
+                            self.sm.save_state(state)
+                            logger.info(f"Backfilled current_sl from order: {state['current_sl']}")
                 return True
 
             # Condition: Only update if Lot 1 (OCO) has hit its TARGET
