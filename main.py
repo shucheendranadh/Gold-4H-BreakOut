@@ -127,25 +127,35 @@ def main():
         # signal_engine.generate_restorative_plan handles the time logic (returns None if too early/invalid)
         if current_hhmm > MARKET_START_TIME[:5] and current_hhmm < SESSION_END_TIME:
             logger.info("Fresh Start detected Mid-Day. Checking for restorative GTT opportunity...")
-            
-            # Use the "Restorative Plan" logic (same as Guardian)
-            plan, meta = signal_engine.generate_restorative_plan(active_contract)
-            
-            if plan:
-                if meta:
-                     sm.save_session_levels(
-                         session_name=meta.get('session', "Startup-Restoration"),
-                         plan=plan,
-                         high_low_data=meta
-                     )
-                logger.info("Restorative Plan Generated. Placing Startup GTTs...")
-                gtt_manager.place_gtts(
-                    active_contract=active_contract,
-                    plan=plan,
-                    session_name="Startup-Restoration"
+
+            # Guard: if an active paper position already exists, don't place new GTTs.
+            # This prevents duplicate orders after a restart mid-trade (state cleared but
+            # paper_orders.json still has an active position from the previous session).
+            active_paper_qty = paper.get_net_position_qty()
+            if active_paper_qty != 0:
+                logger.warning(
+                    f"Startup restoration skipped — active paper position detected "
+                    f"(net qty={active_paper_qty}). Waiting for handle_daily_maintenance to reconcile state."
                 )
             else:
-                logger.info("No Restorative Plan available (Time might be too early or data missing). waiting for next session.")
+                # Use the "Restorative Plan" logic (same as Guardian)
+                plan, meta = signal_engine.generate_restorative_plan(active_contract)
+
+                if plan:
+                    if meta:
+                         sm.save_session_levels(
+                             session_name=meta.get('session', "Startup-Restoration"),
+                             plan=plan,
+                             high_low_data=meta
+                         )
+                    logger.info("Restorative Plan Generated. Placing Startup GTTs...")
+                    gtt_manager.place_gtts(
+                        active_contract=active_contract,
+                        plan=plan,
+                        session_name="Startup-Restoration"
+                    )
+                else:
+                    logger.info("No Restorative Plan available (Time might be too early or data missing). waiting for next session.")
 
     # --- Timing Variables ---
     last_maintenance_time = 0
