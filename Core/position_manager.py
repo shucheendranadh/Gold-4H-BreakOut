@@ -291,6 +291,24 @@ class PositionManager:
                 new_sl = self.mround(min(val1, val2), 1)
             
             logger.info(f"Daily Trailing SL Calculation for {triggered_side}: {new_sl}")
+
+            # Ratchet guard: TSL must only move in the profitable direction.
+            # If the formula gives a worse SL than what's already set, hold the current value.
+            existing_sl = state.get("current_sl")
+            if existing_sl is not None:
+                if triggered_side == "BUY" and new_sl <= existing_sl:
+                    logger.info(f"TSL ratchet: new {new_sl} ≤ current {existing_sl} — holding existing TSL.")
+                    state["tsl_session_slot"] = tsl_session_slot
+                    state["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    self.sm.save_state(state)
+                    return True
+                elif triggered_side == "SELL" and new_sl >= existing_sl:
+                    logger.info(f"TSL ratchet: new {new_sl} ≥ current {existing_sl} — holding existing TSL.")
+                    state["tsl_session_slot"] = tsl_session_slot
+                    state["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    self.sm.save_state(state)
+                    return True
+
             self.om.modify_gtt_order(lot2_id, new_sl)
 
             # Mark this session slot as done so we don't recalculate every 5s
