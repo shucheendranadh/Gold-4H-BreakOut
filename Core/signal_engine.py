@@ -150,7 +150,12 @@ class SignalEngine:
         current_time_str = now.strftime("%H:%M:%S")
         
         actions = []
-        
+
+        # Holiday / market-closed guard — skip all session triggers if MCX hasn't opened today.
+        # Maintenance (TSL) still runs via handle_daily_maintenance; only session placement is blocked.
+        if not self.md.fetcher.is_market_open_today(instrument_token):
+            return actions
+
         # Parse last_updated early
         last_updated_str = state.get("last_updated") if state else None
         last_updated_dt = None

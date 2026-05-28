@@ -191,7 +191,8 @@ def main():
             # --- JOB 2: SIGNAL & MAINTENANCE (Every 5 Seconds) ---
             if current_ts - last_maintenance_time > 5:
                 # 0. Paper Trading Monitor (Live Execution Simulation)
-                if ENABLE_PAPER_TRADING:
+                # Skip on holidays — stale LTP from a closed market could falsely trigger paper orders.
+                if ENABLE_PAPER_TRADING and signal_engine.md.fetcher.is_market_open_today(active_contract):
                     ltp = signal_engine.md.fetcher.fetch_ltp(active_contract)
                     if ltp:
                         paper.monitor(ltp)

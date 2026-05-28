@@ -10,6 +10,61 @@ class HistoricalDataFetcher:
         self.base_url = UPSTOX_HISTORICAL_CANDLE_URL
         self._ltp_err_logged_at = None   # rate-limit repeated LTP error logs
         self._ltp_err_status = None
+        self._market_open_cache = None   # (date_str, is_open, checked_at)
+
+    def is_market_open_today(self, instrument_key):
+        """
+        Returns True if MCX has opened for trading today (ohlc.open > 0 in market quote).
+        Returns True by default on any error so we never accidentally block a trading day.
+
+        Cache behaviour:
+        - Once confirmed OPEN  → trust for rest of day (no further API calls).
+        - Confirmed CLOSED     → re-check every 30 min in case it was just pre-market.
+        - Before 09:15 IST     → always return True (ohlc.open may not be set yet at 09:00).
+        """
+        now = datetime.now()
+        today_str = now.strftime("%Y-%m-%d")
+
+        # Allow the first 15 minutes of the trading day before checking — ohlc.open
+        # might not be populated at exactly 09:00:03 even on a valid trading day.
+        if now.hour == 9 and now.minute < 15:
+            return True
+
+        # Cache: confirmed open → skip API call for rest of day
+        if self._market_open_cache:
+            cached_date, cached_open, checked_at = self._market_open_cache
+            if cached_date == today_str:
+                if cached_open:
+                    return True
+                # Confirmed closed: re-check after 30 min
+                if (now - checked_at).total_seconds() < 1800:
+                    return False
+
+        if not get_access_token():
+            return True  # fail open
+
+        headers = {
+            'Accept': 'application/json',
+            'Authorization': f'Bearer {get_access_token()}'
+        }
+        params = {'instrument_key': instrument_key}
+
+        try:
+            response = requests.get(UPSTOX_MARKET_QUOTE_URL, headers=headers, params=params)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status") == "success":
+                    quote_data = self._get_quote_data(data, instrument_key)
+                    day_open = quote_data.get("ohlc", {}).get("open", 0) or 0
+                    is_open = float(day_open) > 0
+                    self._market_open_cache = (today_str, is_open, now)
+                    if not is_open:
+                        logger.info(f"Market holiday/closed detected: ohlc.open={day_open}. Skipping session triggers.")
+                    return is_open
+        except Exception as e:
+            logger.warning(f"Holiday check failed ({e}). Assuming market is open.")
+
+        return True  # fail open
 
     def fetch_previous_trading_days(self, instrument_key, days=4, interval="day", include_today=False):
         """
