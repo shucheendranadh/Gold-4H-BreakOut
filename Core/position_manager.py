@@ -188,6 +188,19 @@ class PositionManager:
                 logger.error(f"Could not find Lot 2 GTT ID for {triggered_side}")
                 return True
 
+            # --- Closure Detection (before session-slot gate) ---
+            # Must run here so a trade that closed while the slot was already latched
+            # doesn't get stuck with a stale triggered_side forever.
+            lot2_active = self.om.is_gtt_active(lot2_id)
+            lot1_active = self.om.is_gtt_active(lot1_id) if lot1_id else False
+            if not lot2_active and not lot1_active:
+                logger.info(
+                    f"Trade complete: both GTT lots inactive "
+                    f"(OCO={lot1_id}, SINGLE={lot2_id}). Clearing state."
+                )
+                self.sm.save_state({})
+                return True
+
             # --- Session-Slot Gate ---
             # TSL should only be recalculated once per 4H session (at session close),
             # not every 5 seconds. Derive the current session slot from SESSIONS config

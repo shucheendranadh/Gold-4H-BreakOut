@@ -491,23 +491,28 @@ class OrderManager:
         details = self.get_gtt_order_details(gtt_id)
         if not details:
             return False
-            
-        status = details.get("status")
-        # Top level status check
-        active_statuses = ["ACTIVE", "OPEN", "TRANSITIVE", "TRIGGER_PENDING", "SCHEDULED"]
-        
-        if status in active_statuses:
+
+        # Normalise to lowercase for case-insensitive comparison (paper exchange returns lowercase)
+        status = (details.get("status") or "").lower()
+
+        # Explicitly inactive — short-circuit before checking rules.
+        # Paper exchange returns "completed" for CLOSED orders.
+        if status in {"completed", "rejected", "cancelled", "expired"}:
+            return False
+
+        # Explicitly active top-level statuses
+        if status in {"active", "open", "transitive", "trigger_pending", "scheduled", "triggered"}:
             logger.info(f"GTT {gtt_id} is ACTIVE (Status: {status})")
             return True
-            
-        # Check rules if top-level status is not explicitly active
+
+        # Fallback: check individual rules (live Upstox path)
         rules = details.get("rules", [])
         for rule in rules:
-            rule_status = rule.get("status")
-            if rule_status in ["SCHEDULED", "OPEN", "PENDING", "ACTIVE"]:
+            rule_status = (rule.get("status") or "").lower()
+            if rule_status in {"scheduled", "open", "pending", "active"}:
                 logger.info(f"GTT {gtt_id} is ACTIVE (Rule {rule.get('strategy')} is {rule_status})")
                 return True
-        
+
         return False
 
     def fetch_active_gtts(self):

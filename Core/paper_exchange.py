@@ -169,26 +169,35 @@ class PaperExchange:
             "CLOSED": "completed"
         }
         
-        # We need to mimic the 'rules' array so PositionManager can read it
+        # We need to mimic the 'rules' array so PositionManager can read it.
+        # For CLOSED orders, only the exit rule that actually triggered is COMPLETED;
+        # all other rules are CANCELLED (not ACTIVE — that would fool is_gtt_active).
+        is_closed = order['status'] == "CLOSED"
+
+        def rule_status(strategy):
+            if not is_closed:
+                # PENDING/ACTIVE: entry is COMPLETED once filled, rest are ACTIVE (pending)
+                if strategy == "ENTRY":
+                    return "COMPLETED" if order['status'] == "ACTIVE" else "ACTIVE"
+                return "ACTIVE"
+            # CLOSED: the exit trigger is COMPLETED, everything else is CANCELLED
+            if strategy == "ENTRY":
+                return "COMPLETED"
+            if strategy == "STOPLOSS":
+                return "COMPLETED" if order['exit_reason'] == "STOPLOSS" else "CANCELLED"
+            if strategy == "TARGET":
+                return "COMPLETED" if order['exit_reason'] == "TARGET" else "CANCELLED"
+            return "CANCELLED"
+
         rules = [
-            # Entry Rule
-            {
-                "strategy": "ENTRY",
-                "status": "COMPLETED" if order['status'] in ["ACTIVE", "CLOSED"] else "ACTIVE",
-                "trigger_price": order['entry_price']
-            },
-            # SL Rule
-            {
-                "strategy": "STOPLOSS",
-                "status": "COMPLETED" if order['exit_reason'] == "STOPLOSS" else "ACTIVE",
-                "trigger_price": order['sl_price']
-            }
+            {"strategy": "ENTRY",    "status": rule_status("ENTRY"),    "trigger_price": order['entry_price']},
+            {"strategy": "STOPLOSS", "status": rule_status("STOPLOSS"), "trigger_price": order['sl_price']},
         ]
-        
+
         if order['target_price'] > 0:
             rules.append({
                 "strategy": "TARGET",
-                "status": "COMPLETED" if order['exit_reason'] == "TARGET" else "ACTIVE",
+                "status": rule_status("TARGET"),
                 "trigger_price": order['target_price']
             })
             
