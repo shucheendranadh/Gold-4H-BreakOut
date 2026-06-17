@@ -26,7 +26,8 @@ def _read_token_from_file():
     return None
 
 def get_access_token():
-    """Return the current access token, reloading from file if it has changed."""
+    """Return the current access token, reloading from file if it has changed.
+    Falls back to UPSTOX_ACCESS_TOKEN environment variable if the file is missing."""
     try:
         mtime = os.path.getmtime(_token_file)
         if _token_cache["token"] is not None and mtime == _token_cache["mtime"]:
@@ -35,14 +36,19 @@ def get_access_token():
         if token:
             _token_cache["token"] = token
             _token_cache["mtime"] = mtime
+            return token
     except Exception:
         pass
-    return _token_cache["token"]
+    # Fallback: environment variable (e.g. CI, Docker, or when token file is absent)
+    return _token_cache["token"] or os.environ.get("UPSTOX_ACCESS_TOKEN", "").strip() or None
 
-# Validate token exists at startup
-UPSTOX_ACCESS_TOKEN = _read_token_from_file()
+# Validate token exists at startup — file first, then env var
+UPSTOX_ACCESS_TOKEN = _read_token_from_file() or os.environ.get("UPSTOX_ACCESS_TOKEN", "").strip() or None
 if not UPSTOX_ACCESS_TOKEN:
-    raise ValueError("UPSTOX_ACCESS_TOKEN not found in ~/tradingbridge/.token.env")
+    raise ValueError(
+        "UPSTOX_ACCESS_TOKEN not found in ~/tradingbridge/.token.env "
+        "or environment variable UPSTOX_ACCESS_TOKEN"
+    )
 _token_cache["token"] = UPSTOX_ACCESS_TOKEN
 try:
     _token_cache["mtime"] = os.path.getmtime(_token_file)
